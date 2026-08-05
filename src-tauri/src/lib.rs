@@ -1,0 +1,24 @@
+mod database;
+mod export;
+
+use tauri::Manager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            let database = database::AppDatabase::initialize(app.handle())?;
+            app.manage(database);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            database::save_project_history,
+            database::list_project_history,
+            database::save_app_setting,
+            database::list_app_settings,
+            export::check_ffmpeg_health,
+            export::run_ffmpeg_export
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running RemixAI Pro");
+}
