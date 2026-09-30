@@ -22,6 +22,7 @@ import {
   Volume2,
   X
 } from "lucide-react";
+import { WorkflowAiPipeline } from "@/components/WorkflowAiPipeline";
 import { useExportController } from "@/hooks/useExportController";
 import { useWorkflowController } from "@/hooks/useWorkflowController";
 import { useCommercialStore } from "@/stores/CommercialStore";
@@ -252,6 +253,8 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
           })}
         </div>
       </div>
+
+      <WorkflowAiPipeline route={workflow.route} />
 
       <div className="workflow-workspace-grid">
         <aside className="space-y-4">

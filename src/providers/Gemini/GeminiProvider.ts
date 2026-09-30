@@ -1,10 +1,11 @@
 import { getProviderEnvKey, type ProviderId } from "@/config/providerConfig";
 import type { ProviderCapability, ProviderConfigReader, ProviderHealth, TextGenerationProvider, TextGenerationRequest, TextGenerationResult } from "@/providers/Provider";
 import { createProviderHealth } from "@/providers/createProviderHealth";
+import { aiGatewayClient } from "@/tauri/AiGatewayClient";
 
 export class GeminiProvider implements TextGenerationProvider {
   readonly id: ProviderId = "gemini";
-  readonly name = "Gemini 2.5 Flash";
+  readonly name = "Gemini";
   readonly capabilities: ProviderCapability[] = ["llm"];
 
   constructor(private readonly config: ProviderConfigReader) {}
@@ -22,13 +23,17 @@ export class GeminiProvider implements TextGenerationProvider {
     });
   }
 
-  async generateText(_request: TextGenerationRequest): Promise<TextGenerationResult> {
+  async generateText(request: TextGenerationRequest): Promise<TextGenerationResult> {
+    this.assertConfigured();
+    return aiGatewayClient.execute<TextGenerationRequest, TextGenerationResult>({
+      providerId: this.id,
+      operation: "generate-text",
+      payload: request
+    });
+  }
+
+  private assertConfigured() {
     const health = this.getHealth();
-
-    if (!health.configured) {
-      throw new Error(`${this.name} requires ${health.missingConfigKeys.join(", ")}.`);
-    }
-
-    throw new Error(`${this.name} network execution is available only after backend API transport is configured.`);
+    if (!health.configured) throw new Error(`${this.name} requires ${health.missingConfigKeys.join(", ")}.`);
   }
 }

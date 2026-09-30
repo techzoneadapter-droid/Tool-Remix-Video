@@ -1,19 +1,19 @@
 import { getProviderEnvKey, type ProviderId } from "@/config/providerConfig";
+import { createProviderHealth } from "@/providers/createProviderHealth";
 import type {
+  ImageGenerationProvider,
+  ImageGenerationRequest,
+  ImageGenerationResult,
   ProviderCapability,
   ProviderConfigReader,
-  ProviderHealth,
-  VideoGenerationProvider,
-  VideoGenerationRequest,
-  VideoGenerationResult
+  ProviderHealth
 } from "@/providers/Provider";
-import { createProviderHealth } from "@/providers/createProviderHealth";
 import { aiGatewayClient } from "@/tauri/AiGatewayClient";
 
-export class GoogleVeoProvider implements VideoGenerationProvider {
-  readonly id: ProviderId = "googleVeo";
-  readonly name = "Google Veo";
-  readonly capabilities: ProviderCapability[] = ["video"];
+export class FluxProvider implements ImageGenerationProvider {
+  readonly id: ProviderId = "flux";
+  readonly name = "FLUX Kontext";
+  readonly capabilities: ProviderCapability[] = ["image"];
 
   constructor(private readonly config: ProviderConfigReader) {}
 
@@ -30,14 +30,10 @@ export class GoogleVeoProvider implements VideoGenerationProvider {
     });
   }
 
-  async generateVideo(request: VideoGenerationRequest): Promise<VideoGenerationResult> {
+  generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const health = this.getHealth();
     if (!health.configured) throw new Error(`${this.name} requires ${health.missingConfigKeys.join(", ")}.`);
 
-    return aiGatewayClient.execute<VideoGenerationRequest, VideoGenerationResult>({
-      providerId: this.id,
-      operation: "generate-video",
-      payload: request
-    });
+    return aiGatewayClient.execute({ providerId: this.id, operation: "generate-image", payload: request });
   }
 }

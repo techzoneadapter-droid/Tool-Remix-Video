@@ -1,90 +1,51 @@
-import { useEffect } from "react";
-import { BrainCircuit, Cpu, Database, Globe2, HardDrive, KeyRound, Palette, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Activity,
+  BrainCircuit,
+  CheckCircle2,
+  Copy,
+  Cpu,
+  Database,
+  HardDrive,
+  KeyRound,
+  Layers3,
+  LockKeyhole,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Video,
+  Wand2
+} from "lucide-react";
+import { aiProviderCatalog, getProviderConfigKey } from "@/constants/aiProviderCatalog";
+import { aiAutomationService } from "@/services/AiAutomationService";
+import type { ProviderHealth } from "@/providers/Provider";
+import { aiProviderRegistry } from "@/services/AiProviderRegistry";
 import { useCommercialStore } from "@/stores/CommercialStore";
 
-const tabs = ["Tổng quan", "AI Providers", "Chất lượng", "Thư mục", "Xuất bản", "Giao diện", "Phím tắt", "Tài khoản", "Giới thiệu"];
+const tabs = [
+  { id: "overview", label: "Tổng quan", icon: Activity },
+  { id: "providers", label: "AI Providers", icon: BrainCircuit },
+  { id: "automation", label: "Tự động hóa", icon: Wand2 },
+  { id: "performance", label: "Hệ thống", icon: Cpu }
+] as const;
+type SettingsTabId = (typeof tabs)[number]["id"];
+const capabilityLabel: Record<string, string> = { llm:"LLM", speech:"STT", subtitle:"Subtitle", voice:"Voice", image:"Image", video:"Video", ocr:"OCR", "scene-detection":"Scene", "object-detection":"Object", "face-analysis":"Face" };
 
 export function SettingsPage() {
-  const commercial = useCommercialStore((store) => store.state);
-  const loaded = useCommercialStore((store) => store.loaded);
-  const load = useCommercialStore((store) => store.load);
-
-  useEffect(() => {
-    if (!loaded) void load();
-  }, [load, loaded]);
-
-  return (
-    <section className="screen-page settings-screen">
-      <header className="mb-5">
-        <h1 className="text-[28px] font-extrabold text-white">Cài đặt</h1>
-        <p className="mt-2 text-sm text-app-muted">Tùy chỉnh ứng dụng theo nhu cầu của bạn.</p>
-      </header>
-      <div className="settings-layout">
-        <nav className="settings-tabs">
-          {tabs.map((tab, index) => (
-            <button key={tab} className={index === 0 ? "selected" : ""}>
-              <SlidersHorizontal size={16} />
-              {tab}
-            </button>
-          ))}
-        </nav>
-        <div className="settings-content">
-          <Panel title="Tổng quan" icon={Globe2}>
-            <SettingLine label="Ngôn ngữ" value="Tiếng Việt" />
-            <SettingLine label="Chủ đề" value="Tối" />
-            <ToggleLine label="Tự động lưu dự án" enabled />
-            <ToggleLine label="Kiểm tra cập nhật" enabled={commercial.updater.status !== "error"} />
-            <ToggleLine label="Gửi báo cáo ẩn danh" />
-            <SettingLine label="License" value={`${commercial.license.tier.toUpperCase()} · ${commercial.license.status}`} />
-            <SettingLine label="Credits" value={new Intl.NumberFormat("en-US").format(commercial.credits.balance)} />
-          </Panel>
-          <Panel title="Bộ nhớ & Tài nguyên" icon={HardDrive}>
-            <div className="resource-meter"><span style={{ width: "62%" }} /></div>
-            <SettingLine label="Sử dụng RAM tối đa" value="12 GB / 16 GB" />
-            <SettingLine label="Số luồng xử lý" value="8" />
-            <ToggleLine label="Tăng tốc GPU" enabled />
-          </Panel>
-        </div>
-        <aside className="system-card">
-          <h2>Thông tin hệ thống</h2>
-          <SystemItem icon={Cpu} label="CPU" value="Intel Core i7-12700H" />
-          <SystemItem icon={BrainCircuit} label="GPU" value="NVIDIA GeForce RTX 3060" />
-          <SystemItem icon={Database} label="RAM" value="16 GB" />
-          <SystemItem icon={ShieldCheck} label="Bảo mật" value="Local encrypted storage" />
-          <SystemItem icon={KeyRound} label="License" value={commercial.license.message} />
-          <SystemItem icon={Database} label="Installer" value={commercial.installer.message} />
-          <SystemItem icon={Globe2} label="Updater" value={commercial.updater.message} />
-          <SystemItem icon={Palette} label="Theme" value="Dark only" />
-        </aside>
-      </div>
-      <footer className="screen-footer-actions">
-        <button className="secondary-button">Đặt lại</button>
-        <div className="ml-auto flex gap-3">
-          <button className="secondary-button">Hủy</button>
-          <button className="dialog-save">Lưu cài đặt</button>
-        </div>
-      </footer>
-    </section>
-  );
+  const [activeTab,setActiveTab]=useState<SettingsTabId>("overview"); const [copiedKey,setCopiedKey]=useState<string|null>(null);
+  const commercial=useCommercialStore((store)=>store.state); const loaded=useCommercialStore((store)=>store.loaded); const load=useCommercialStore((store)=>store.load);
+  const providerHealth=useMemo(()=>aiProviderRegistry.health(),[]); const readiness=useMemo(()=>aiAutomationService.listReadiness(),[]); const healthById=useMemo(()=>new Map(providerHealth.map((item)=>[item.id,item])),[providerHealth]);
+  const cloudReady=aiProviderCatalog.filter((provider)=>healthById.get(provider.id)?.configured).length; const localProviders=providerHealth.filter((provider)=>!aiProviderCatalog.some((item)=>item.id===provider.id));
+  useEffect(()=>{if(!loaded)void load();},[load,loaded]);
+  async function copyConfigKey(key:string){try{await navigator.clipboard?.writeText(key);setCopiedKey(key);window.setTimeout(()=>setCopiedKey(null),1200);}catch{setCopiedKey(null);}}
+  return <section className="screen-page settings-screen"><div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-purple-300/80"><Settings2 size={14}/> RemixAI Pro Control Center</div><h1 className="text-[30px] font-extrabold text-white">Cài đặt & AI Integrations</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-app-muted">Quản lý khả năng AI theo capability thay vì khóa vào một hãng. Khi đổi provider, UI và workflow không cần viết lại.</p></div><div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-xs text-white/70"><ShieldCheck size={17} className="text-emerald-300"/>UI không gọi trực tiếp API bên thứ ba</div></div><div className="grid min-h-[620px] grid-cols-[210px_minmax(0,1fr)] gap-5"><nav className="rounded-[22px] border border-white/[0.07] bg-black/15 p-2">{tabs.map((tab)=>{const Icon=tab.icon;const selected=activeTab===tab.id;return <button key={tab.id} className={`mb-1 flex h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold transition ${selected?"bg-purple-500/15 text-white":"text-white/55 hover:bg-white/[0.04] hover:text-white/85"}`} onClick={()=>setActiveTab(tab.id)}><Icon size={17} className={selected?"text-purple-300":"text-white/40"}/>{tab.label}</button>;})}<div className="mt-5 border-t border-white/[0.06] px-3 pt-4"><div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">License</div><div className="mt-2 text-sm font-bold text-white">{commercial.license.tier.toUpperCase()}</div><div className="mt-1 text-xs text-app-muted">{commercial.license.message}</div></div></nav><div className="min-w-0">{activeTab==="overview"?<OverviewTab cloudReady={cloudReady} cloudTotal={aiProviderCatalog.length} readyAutomations={readiness.filter((item)=>item.ready).length} automationTotal={readiness.length} credits={commercial.credits.balance}/>:null}{activeTab==="providers"?<ProvidersTab healthById={healthById} localProviders={localProviders} copiedKey={copiedKey} onCopyKey={copyConfigKey}/>:null}{activeTab==="automation"?<AutomationTab/>:null}{activeTab==="performance"?<SystemTab/>:null}</div></div></section>;
 }
 
-function Panel({ title, icon: Icon, children }: { title: string; icon: typeof Globe2; children: React.ReactNode }) {
-  return (
-    <section className="settings-panel">
-      <h2><Icon size={17} />{title}</h2>
-      {children}
-    </section>
-  );
-}
+function OverviewTab({cloudReady,cloudTotal,readyAutomations,automationTotal,credits}:{cloudReady:number;cloudTotal:number;readyAutomations:number;automationTotal:number;credits:number}){return <div className="space-y-4"><div className="grid grid-cols-3 gap-4"><MetricCard icon={<BrainCircuit size={19}/>} label="Cloud providers" value={`${cloudReady}/${cloudTotal}`} hint="đã có API key"/><MetricCard icon={<Sparkles size={19}/>} label="AI workflows" value={`${readyAutomations}/${automationTotal}`} hint="đủ capability bắt buộc"/><MetricCard icon={<KeyRound size={19}/>} label="Credits" value={new Intl.NumberFormat("en-US").format(credits)} hint="sẵn sàng cho tác vụ"/></div><section className="rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-5"><div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 text-purple-300"><Layers3 size={19}/></div><div><h2 className="font-extrabold text-white">Kiến trúc AI-ready</h2><p className="mt-1 text-xs text-app-muted">Từng lớp có thể thay provider độc lập.</p></div></div><div className="grid grid-cols-6 gap-2">{["Input","STT/OCR","LLM","Image/Video","Voice/Sub","FFmpeg Export"].map((step,index)=><div key={step} className="relative rounded-xl border border-white/[0.07] bg-black/15 px-3 py-4 text-center"><div className="text-[10px] font-bold text-purple-300">0{index+1}</div><div className="mt-2 text-xs font-semibold text-white">{step}</div>{index<5?<span className="absolute -right-2 top-1/2 z-10 h-px w-4 bg-white/15"/>:null}</div>)}</div></section><section className="rounded-[22px] border border-emerald-400/10 bg-emerald-400/[0.035] p-5"><div className="flex items-start gap-3"><LockKeyhole size={20} className="mt-0.5 text-emerald-300"/><div><h3 className="font-bold text-white">Nguyên tắc bảo mật API</h3><p className="mt-1 text-sm leading-6 text-white/55">Bản dev dùng biến môi trường để kiểm tra cấu hình. Khi đóng gói production, secret nên được chuyển vào native adapter/secure token store; component React chỉ gọi gateway theo capability và không gọi API hãng trực tiếp.</p></div></div></section></div>}
 
-function SettingLine({ label, value }: { label: string; value: string }) {
-  return <div className="setting-line"><span>{label}</span><button>{value}</button></div>;
-}
+function ProvidersTab({healthById,localProviders,copiedKey,onCopyKey}:{healthById:Map<string,ProviderHealth>;localProviders:ProviderHealth[];copiedKey:string|null;onCopyKey:(key:string)=>void}){return <div className="space-y-4"><section className="rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-5"><div className="mb-4 flex items-center justify-between gap-4"><div><h2 className="text-lg font-extrabold text-white">Cloud API Providers</h2><p className="mt-1 text-xs text-app-muted">Cổng đã định nghĩa sẵn; chỉ cần cấu hình key và nối native transport theo provider.</p></div><span className="rounded-full border border-purple-400/20 bg-purple-400/[0.08] px-3 py-1.5 text-xs font-bold text-purple-200">{aiProviderCatalog.length} integrations</span></div><div className="grid grid-cols-2 gap-3">{aiProviderCatalog.map((provider)=>{const health=healthById.get(provider.id);const configured=Boolean(health?.configured);const envKey=getProviderConfigKey(provider.id);return <article key={provider.id} className="rounded-2xl border border-white/[0.07] bg-black/15 p-4"><div className="flex items-start gap-3"><div className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${configured?"bg-emerald-400/10 text-emerald-300":"bg-white/[0.05] text-white/35"}`}>{configured?<CheckCircle2 size={18}/>:<KeyRound size={18}/>}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-extrabold text-white">{provider.name}</h3><span className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${configured?"bg-emerald-400/10 text-emerald-300":"bg-amber-400/10 text-amber-300"}`}>{configured?"READY":"CHƯA CÓ KEY"}</span></div><p className="mt-1 min-h-10 text-xs leading-5 text-white/45">{provider.description}</p></div></div><div className="mt-3 flex flex-wrap gap-1.5">{provider.capabilities.map((capability)=><span key={capability} className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2 py-1 text-[10px] font-bold text-white/55">{capabilityLabel[capability]??capability}</span>)}</div><div className="mt-3 grid grid-cols-2 gap-2 text-[11px]"><div className="rounded-xl bg-white/[0.025] p-2.5"><div className="text-white/30">Model</div><div className="mt-1 truncate font-semibold text-white/70">{provider.modelHint}</div></div><div className="rounded-xl bg-white/[0.025] p-2.5"><div className="text-white/30">Endpoint</div><div className="mt-1 truncate font-semibold text-white/70">{provider.endpointHint}</div></div></div><button className="mt-3 flex h-10 w-full items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-left text-xs text-white/60 transition hover:bg-white/[0.05]" onClick={()=>onCopyKey(envKey)}><KeyRound size={14}/><code className="min-w-0 flex-1 truncate">{envKey}</code><Copy size={13}/><span className="sr-only">{copiedKey===envKey?"Đã copy":"Copy biến môi trường"}</span></button></article>;})}</div></section><section className="rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-5"><h2 className="text-base font-extrabold text-white">Local AI / Media Tools</h2><div className="mt-3 grid grid-cols-2 gap-3">{localProviders.map((provider)=><div key={provider.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-black/10 p-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-400/10 text-emerald-300"><Cpu size={17}/></div><div className="min-w-0"><div className="text-sm font-bold text-white">{provider.name}</div><div className="mt-1 truncate text-[11px] text-white/40">{provider.capabilities.map((capability)=>capabilityLabel[capability]??capability).join(" · ")}</div></div><span className="ml-auto text-[10px] font-bold text-emerald-300">LOCAL</span></div>)}</div></section></div>}
 
-function ToggleLine({ label, enabled = false }: { label: string; enabled?: boolean }) {
-  return <div className="setting-line"><span>{label}</span><span className={`toggle ${enabled ? "toggle-on" : ""}`}><span /></span></div>;
-}
-
-function SystemItem({ icon: Icon, label, value }: { icon: typeof Cpu; label: string; value: string }) {
-  return <div className="system-item"><Icon size={16} /><span>{label}</span><strong>{value}</strong></div>;
-}
+function AutomationTab(){const readiness=aiAutomationService.listReadiness();return <section className="rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-5"><div className="mb-4"><h2 className="text-lg font-extrabold text-white">AI Automation Map</h2><p className="mt-1 text-xs text-app-muted">Các tác vụ người dùng yêu cầu đã được ánh xạ vào 3 chế độ chính của app.</p></div><div className="space-y-3">{readiness.map((item)=><article key={item.definition.id} className="rounded-2xl border border-white/[0.07] bg-black/15 p-4"><div className="flex items-start gap-3"><div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.ready?"bg-emerald-400/10 text-emerald-300":"bg-amber-400/10 text-amber-300"}`}>{item.ready?<CheckCircle2 size={19}/>:<Sparkles size={19}/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-extrabold text-white">{item.definition.title}</h3><span className="rounded-full border border-white/[0.08] px-2 py-1 text-[10px] font-bold text-white/45">{item.definition.mode}</span></div><p className="mt-1 text-xs leading-5 text-white/45">{item.definition.description}</p></div><div className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${item.ready?"bg-emerald-400/10 text-emerald-300":"bg-amber-400/10 text-amber-300"}`}>{item.ready?"SẴN SÀNG":`THIẾU ${item.missingCapabilities.length}`}</div></div><div className="mt-4 flex flex-wrap items-center gap-2">{item.definition.pipeline.map((step,index)=><div key={`${item.definition.id}-${step}`} className="flex items-center gap-2"><span className="rounded-lg border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5 text-[10px] font-semibold text-white/65">{step}</span>{index<item.definition.pipeline.length-1?<span className="text-white/20">→</span>:null}</div>)}</div></article>)}</div></section>}
+function SystemTab(){return <div className="grid grid-cols-2 gap-4"><SystemCard icon={<Cpu size={18}/>} title="Desktop Runtime" value="Tauri v2" description="Native desktop shell; phù hợp chạy FFmpeg và cầu nối API an toàn hơn gọi trực tiếp từ webview."/><SystemCard icon={<Database size={18}/>} title="Project Storage" value="SQLite local" description="Lưu lịch sử dự án và app settings qua repository/service boundary."/><SystemCard icon={<Video size={18}/>} title="Video Engine" value="FFmpeg boundary" description="Export queue đã tách khỏi UI, hỗ trợ batch, pause/resume/cancel ở tầng service."/><SystemCard icon={<HardDrive size={18}/>} title="AI Transport" value="Provider Pattern" description="Mỗi hãng AI là module độc lập, có health check và capability routing."/></div>}
+function MetricCard({icon,label,value,hint}:{icon:ReactNode;label:string;value:string;hint:string}){return <div className="rounded-[20px] border border-white/[0.07] bg-white/[0.025] p-4"><div className="flex items-center gap-2 text-purple-300">{icon}<span className="text-xs font-bold text-white/50">{label}</span></div><div className="mt-3 text-2xl font-extrabold text-white">{value}</div><div className="mt-1 text-[11px] text-white/35">{hint}</div></div>}
+function SystemCard({icon,title,value,description}:{icon:ReactNode;title:string;value:string;description:string}){return <article className="rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-5"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 text-purple-300">{icon}</div><div><div className="text-xs text-white/40">{title}</div><div className="mt-1 font-extrabold text-white">{value}</div></div></div><p className="mt-4 text-sm leading-6 text-white/45">{description}</p></article>}

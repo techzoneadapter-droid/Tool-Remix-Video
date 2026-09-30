@@ -1,5 +1,5 @@
-import type { ToolRoute } from "@/types/Navigation";
 import type { ProviderCapability } from "@/providers/Provider";
+import type { ToolRoute } from "@/types/Navigation";
 
 export type WorkflowJobStatus = "queued" | "running" | "paused" | "completed" | "cancelled" | "blocked";
 
@@ -8,6 +8,7 @@ export interface WorkflowStep {
   label: string;
   progressWeight: number;
   requiredCapabilities: ProviderCapability[];
+  optionalCapabilities?: ProviderCapability[];
 }
 
 export interface WorkflowLogEntry {

@@ -8,6 +8,7 @@ import type {
   VoiceProvider
 } from "@/providers/Provider";
 import { createProviderHealth } from "@/providers/createProviderHealth";
+import { aiGatewayClient } from "@/tauri/AiGatewayClient";
 
 export class ElevenLabsProvider implements VoiceProvider {
   readonly id: ProviderId = "elevenLabs";
@@ -29,13 +30,14 @@ export class ElevenLabsProvider implements VoiceProvider {
     });
   }
 
-  async generateVoice(_request: VoiceGenerationRequest): Promise<VoiceGenerationResult> {
+  async generateVoice(request: VoiceGenerationRequest): Promise<VoiceGenerationResult> {
     const health = this.getHealth();
+    if (!health.configured) throw new Error(`${this.name} requires ${health.missingConfigKeys.join(", ")}.`);
 
-    if (!health.configured) {
-      throw new Error(`${this.name} requires ${health.missingConfigKeys.join(", ")}.`);
-    }
-
-    throw new Error(`${this.name} voice transport is available only after native API transport is configured.`);
+    return aiGatewayClient.execute<VoiceGenerationRequest, VoiceGenerationResult>({
+      providerId: this.id,
+      operation: "generate-voice",
+      payload: request
+    });
   }
 }

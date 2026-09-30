@@ -43,7 +43,7 @@ export interface TextGenerationProvider extends AiProvider {
 
 export interface SpeechTranscriptionRequest {
   mediaPath: string;
-  language?: "en" | "zh" | "vi";
+  language?: "en" | "zh" | "vi" | "auto";
 }
 
 export interface SpeechTranscriptionResult {
@@ -87,11 +87,29 @@ export interface VoiceProvider extends AiProvider {
   generateVoice(request: VoiceGenerationRequest): Promise<VoiceGenerationResult>;
 }
 
+export interface ImageGenerationRequest {
+  prompt: string;
+  aspectRatio: "16:9" | "9:16" | "1:1";
+  count?: number;
+  referenceImagePath?: string;
+  seed?: number;
+}
+
+export interface ImageGenerationResult {
+  imagePaths: string[];
+  providerJobId?: string;
+}
+
+export interface ImageGenerationProvider extends AiProvider {
+  generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResult>;
+}
+
 export interface VideoGenerationRequest {
   prompt: string;
   durationSeconds: number;
   aspectRatio: "16:9" | "9:16" | "1:1";
   referenceVideoPath?: string;
+  referenceImagePath?: string;
 }
 
 export interface VideoGenerationResult {
