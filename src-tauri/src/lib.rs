@@ -1,6 +1,7 @@
 mod ai_gateway;
 mod database;
 mod export;
+mod media_input;
 mod secret_store;
 
 use tauri::Manager;
@@ -20,6 +21,8 @@ pub fn run() {
             database::list_app_settings,
             export::check_ffmpeg_health,
             export::run_ffmpeg_export,
+            media_input::pick_video_file,
+            media_input::inspect_video_file,
             ai_gateway::ai_gateway_health,
             ai_gateway::ai_gateway_request,
             secret_store::list_ai_secret_status,

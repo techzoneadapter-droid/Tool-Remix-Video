@@ -26,6 +26,7 @@ import { WorkflowAiPipeline } from "@/components/WorkflowAiPipeline";
 import { useExportController } from "@/hooks/useExportController";
 import { useWorkflowController } from "@/hooks/useWorkflowController";
 import { useCommercialStore } from "@/stores/CommercialStore";
+import { nativeMediaClient } from "@/tauri/NativeMediaClient";
 import type { ExportJob, ExportOptions } from "@/types/Export";
 import type { SceneItem, ToggleSetting, WorkflowDefinition } from "@/types/Workflow";
 import type { WorkflowJobStatus } from "@/types/WorkflowJob";
@@ -35,8 +36,11 @@ interface WorkflowPageProps {
 }
 
 interface ImportedVideo {
-  file: File;
-  url: string;
+  file?: File;
+  nativePath?: string;
+  url?: string;
+  name: string;
+  sizeBytes: number;
 }
 
 interface TranslateSettingsState {
@@ -139,7 +143,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
 
   useEffect(() => {
     return () => {
-      if (importedVideo) URL.revokeObjectURL(importedVideo.url);
+      if (importedVideo?.url) URL.revokeObjectURL(importedVideo.url);
     };
   }, [importedVideo]);
 
@@ -151,14 +155,31 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
 
   function handleFile(file: File) {
     setImportedVideo((current) => {
-      if (current) URL.revokeObjectURL(current.url);
-      return { file, url: URL.createObjectURL(file) };
+      if (current?.url) URL.revokeObjectURL(current.url);
+      return { file, url: URL.createObjectURL(file), name: file.name, sizeBytes: file.size };
     });
+  }
+
+  async function pickVideoFromMachine() {
+    try {
+      const selection = await nativeMediaClient.pickVideo();
+      if (!selection) return;
+      setImportedVideo((current) => {
+        if (current?.url) URL.revokeObjectURL(current.url);
+        return {
+          nativePath: selection.path,
+          name: selection.name,
+          sizeBytes: selection.sizeBytes
+        };
+      });
+    } catch {
+      inputRef.current?.click();
+    }
   }
 
   function resetImport() {
     setImportedVideo((current) => {
-      if (current) URL.revokeObjectURL(current.url);
+      if (current?.url) URL.revokeObjectURL(current.url);
       return null;
     });
   }
@@ -201,7 +222,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
   function getExportOptions(): ExportOptions {
     return {
       workflowRoute: workflow.route,
-      inputPath: importedVideo?.file.name ?? sampleVideo.name,
+      inputPath: importedVideo?.nativePath ?? importedVideo?.file?.name ?? sampleVideo.name,
       outputPath: `D:\\RemixAI\\Exports\\${workflow.route}-${Date.now()}.mp4`,
       format: sampleVideo.format,
       codec: "h264",
@@ -271,7 +292,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
             />
             <div
               className="upload-box"
-              onClick={() => inputRef.current?.click()}
+              onClick={() => void pickVideoFromMachine()}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
@@ -282,7 +303,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
               <UploadCloud size={42} />
               <span>Kéo & thả video vào đây</span>
               <small>hoặc</small>
-              <button type="button">Chọn video từ máy</button>
+              <button type="button" onClick={(event) => { event.stopPropagation(); void pickVideoFromMachine(); }}>Chọn video từ máy</button>
             </div>
             <SelectedFile importedVideo={importedVideo} onRemove={resetImport} />
             <VideoInfoPanel importedVideo={importedVideo} />
@@ -358,8 +379,8 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
 }
 
 function SelectedFile({ importedVideo, onRemove }: { importedVideo: ImportedVideo | null; onRemove: () => void }) {
-  const fileSize = importedVideo ? `${(importedVideo.file.size / 1024 / 1024).toFixed(1)} MB` : sampleVideo.size;
-  const fileName = importedVideo?.file.name ?? sampleVideo.name;
+  const fileSize = importedVideo ? `${(importedVideo.sizeBytes / 1024 / 1024).toFixed(1)} MB` : sampleVideo.size;
+  const fileName = importedVideo?.name ?? sampleVideo.name;
 
   return (
     <div className="selected-file">
@@ -368,6 +389,7 @@ function SelectedFile({ importedVideo, onRemove }: { importedVideo: ImportedVide
         <div className="truncate text-sm font-semibold text-white">{fileName}</div>
         <div className="mt-1 text-xs text-app-muted">{sampleVideo.meta}</div>
         <div className="mt-1 text-xs text-app-muted">09:16 &nbsp;&nbsp; {fileSize}</div>
+        {importedVideo?.nativePath ? <div className="mt-1 truncate text-[10px] text-emerald-300/65" title={importedVideo.nativePath}>{importedVideo.nativePath}</div> : null}
       </div>
       <button className="icon-clear" aria-label="Remove selected video" onClick={onRemove}>
         <X size={18} />
@@ -384,8 +406,9 @@ function VideoInfoPanel({ importedVideo }: { importedVideo: ImportedVideo | null
     ["Thời lượng", sampleVideo.duration],
     ["Khung hình", sampleVideo.fps],
     ["Âm thanh", sampleVideo.audio],
-    ["Dung lượng", importedVideo ? `${(importedVideo.file.size / 1024 / 1024).toFixed(1)} MB` : sampleVideo.size],
-    ["Trạng thái", importedVideo ? "Đã sẵn sàng" : "Video mẫu"]
+    ["Dung lượng", importedVideo ? `${(importedVideo.sizeBytes / 1024 / 1024).toFixed(1)} MB` : sampleVideo.size],
+    ["Đường dẫn native", importedVideo?.nativePath ? "Đã nhận" : "Chưa có"],
+    ["Trạng thái", importedVideo ? (importedVideo.nativePath ? "Sẵn sàng cho AI/FFmpeg" : "Web preview") : "Video mẫu"]
   ];
 
   return (
@@ -491,7 +514,15 @@ function VideoPreview({ importedVideo, variant, translate }: { importedVideo: Im
   return (
     <div className="video-preview">
       <div className={`preview-art ${variant}`}>
-        {importedVideo ? <video src={importedVideo.url} controls={false} muted /> : null}
+        {importedVideo?.url ? <video src={importedVideo.url} controls={false} muted /> : null}
+        {importedVideo?.nativePath && !importedVideo.url ? (
+          <div className="grid h-full min-h-[260px] place-items-center px-8 text-center">
+            <div>
+              <div className="text-sm font-bold text-white/80">Video native đã sẵn sàng</div>
+              <div className="mt-2 text-xs text-white/40">AI, STT và FFmpeg sẽ dùng đường dẫn tệp thật. Preview native sẽ được nối ở bước media engine tiếp theo.</div>
+            </div>
+          </div>
+        ) : null}
         {!importedVideo && translate ? (
           <div className="subtitle-preview">
             Vũ trụ là một nơi vô tận
