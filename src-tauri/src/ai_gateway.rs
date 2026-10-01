@@ -209,7 +209,7 @@ fn extract_gemini_text(value: &Value) -> Option<String> {
 }
 
 fn compact_error(raw: &str) -> String {
-    let sanitized = raw.replace(['\r', '\n'], " ");
+    let sanitized = raw.replace('\r', " ").replace('\n', " ");
     if sanitized.chars().count() > 500 {
         sanitized.chars().take(500).collect::<String>() + "…"
     } else {

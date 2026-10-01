@@ -13,21 +13,21 @@ export class AiProviderRegistry {
   private readonly providers: AiProvider[];
 
   constructor(private readonly config = providerConfig) {
-    const config = this.config;
+    const configReader = this.config;
 
     this.providers = [
-      new GeminiProvider(config),
-      new OpenAIProvider(config),
-      new ConfiguredProvider("anthropic", "Anthropic Claude", ["llm"], config),
-      new ConfiguredProvider("openRouter", "OpenRouter", ["llm"], config),
-      new DeepgramProvider(config),
-      new ElevenLabsProvider(config),
-      new GoogleVeoProvider(config),
-      new ConfiguredProvider("kling", "Kling", ["video"], config),
-      new ConfiguredProvider("runway", "Runway", ["video"], config),
-      new FluxProvider(config),
-      new ConfiguredProvider("replicate", "Replicate", ["image", "video"], config),
-      new ConfiguredProvider("fal", "fal.ai", ["image", "video"], config),
+      new GeminiProvider(configReader),
+      new OpenAIProvider(configReader),
+      new ConfiguredProvider("anthropic", "Anthropic Claude", ["llm"], configReader),
+      new ConfiguredProvider("openRouter", "OpenRouter", ["llm"], configReader),
+      new DeepgramProvider(configReader),
+      new ElevenLabsProvider(configReader),
+      new GoogleVeoProvider(configReader),
+      new ConfiguredProvider("kling", "Kling", ["video"], configReader),
+      new ConfiguredProvider("runway", "Runway", ["video"], configReader),
+      new FluxProvider(configReader),
+      new ConfiguredProvider("replicate", "Replicate", ["image", "video"], configReader),
+      new ConfiguredProvider("fal", "fal.ai", ["image", "video"], configReader),
       new LocalToolProvider("pyscenedetect", "PySceneDetect", ["scene-detection"]),
       new LocalToolProvider("paddleocr", "PaddleOCR", ["ocr"]),
       new LocalToolProvider("yolo11", "YOLO11", ["object-detection"]),
