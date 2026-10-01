@@ -99,11 +99,42 @@ fn unprotect_secret(_encrypted: &str) -> Result<String, String> {
     Err("Native secure AI key storage is currently enabled for the Windows desktop build. Use environment variables for this platform.".to_string())
 }
 
+fn provider_env_key(provider_id: &str) -> Option<&'static str> {
+    match provider_id {
+        "gemini" => Some("GEMINI_API_KEY"),
+        "openAI" => Some("OPENAI_API_KEY"),
+        "anthropic" => Some("ANTHROPIC_API_KEY"),
+        "openRouter" => Some("OPENROUTER_API_KEY"),
+        "deepgram" => Some("DEEPGRAM_API_KEY"),
+        "elevenLabs" => Some("ELEVENLABS_API_KEY"),
+        "googleVeo" => Some("GOOGLE_VEO_API_KEY"),
+        "kling" => Some("KLING_API_KEY"),
+        "runway" => Some("RUNWAY_API_KEY"),
+        "flux" => Some("FLUX_API_KEY"),
+        "replicate" => Some("REPLICATE_API_KEY"),
+        "fal" => Some("FAL_API_KEY"),
+        _ => None,
+    }
+}
+
 pub(crate) fn read_ai_secret(app: &AppHandle, provider_id: &str) -> Result<String, String> {
+    validate_provider(provider_id)?;
+
     let path = secret_path(app, provider_id)?;
-    let encrypted = fs::read_to_string(&path)
-        .map_err(|_| format!("No native API key is stored for {provider_id}."))?;
-    unprotect_secret(encrypted.trim())
+    if path.exists() {
+        let encrypted = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+        return unprotect_secret(encrypted.trim());
+    }
+
+    if let Some(env_key) = provider_env_key(provider_id) {
+        if let Ok(value) = std::env::var(env_key) {
+            if !value.trim().is_empty() {
+                return Ok(value);
+            }
+        }
+    }
+
+    Err(format!("No API key is configured for {provider_id}."))
 }
 
 #[tauri::command]
@@ -112,10 +143,22 @@ pub fn list_ai_secret_status(app: AppHandle, provider_ids: Vec<String>) -> Resul
         .into_iter()
         .map(|provider_id| {
             let path = secret_path(&app, &provider_id)?;
+            let env_configured = provider_env_key(&provider_id)
+                .and_then(|key| std::env::var(key).ok())
+                .is_some_and(|value| !value.trim().is_empty());
+            let configured = path.exists() || env_configured;
+            let storage = if path.exists() {
+                "windows-dpapi"
+            } else if env_configured {
+                "environment"
+            } else {
+                "none"
+            };
+
             Ok(AiSecretStatus {
                 provider_id,
-                configured: path.exists(),
-                storage: "windows-dpapi".to_string(),
+                configured,
+                storage: storage.to_string(),
             })
         })
         .collect()

@@ -30,6 +30,7 @@ export interface AiProvider {
 export interface TextGenerationRequest {
   prompt: string;
   systemInstruction?: string;
+  model?: string;
 }
 
 export interface TextGenerationResult {

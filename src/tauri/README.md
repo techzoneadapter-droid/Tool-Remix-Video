@@ -13,3 +13,12 @@ This folder contains frontend-facing helpers for commands exposed by the native 
 ## AI gateway
 
 `AiGatewayClient.ts` remains the stable frontend boundary for text, speech, subtitle, voice, image, and video operations. Provider HTTP adapters should stay native and resolve credentials through the secret store instead of putting long-lived keys in React state.
+
+## Connected text adapters
+
+The native gateway now executes real text-generation calls for:
+
+- OpenAI Responses API (default model: `gpt-5.6-luna`)
+- Gemini Interactions API (default model: `gemini-3.8-flash`)
+
+Provider calls resolve credentials inside the native layer. For local development you can also expose native process environment variables such as `OPENAI_API_KEY` or `GEMINI_API_KEY`; do not use `VITE_*` secrets for production.
