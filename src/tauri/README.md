@@ -30,3 +30,8 @@ Provider calls resolve credentials inside the native layer. For local developmen
 - OpenAI text-to-speech via `/v1/audio/speech`.
 - ElevenLabs synchronous text-to-speech via `/v1/text-to-speech/{voice_id}`.
 - SRT generation is local and deterministic from transcript segments.
+
+## Connected visual adapters
+
+- OpenAI image generation uses the Responses API image-generation tool with GPT Image 2 and writes PNG files into app data.
+- Google Veo uses `veo-3.1-generate-preview:predictLongRunning`, polls the long-running operation, downloads the final MP4, and supports 4/6/8 second 16:9 or 9:16 output.

@@ -1,9 +1,11 @@
 use std::{fs, path::Path, time::{SystemTime, UNIX_EPOCH}};
 
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use reqwest::{multipart, Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
+use tokio::time::{sleep, Duration};
 
 use crate::secret_store::read_ai_secret;
 
@@ -45,6 +47,26 @@ struct VoiceGenerationPayload {
     voice_id: String,
     language: String,
     style: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImageGenerationPayload {
+    prompt: String,
+    aspect_ratio: String,
+    count: Option<u8>,
+    reference_image_path: Option<String>,
+    seed: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VideoGenerationPayload {
+    prompt: String,
+    duration_seconds: f64,
+    aspect_ratio: String,
+    reference_video_path: Option<String>,
+    reference_image_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,6 +116,8 @@ pub async fn ai_gateway_request(app: AppHandle, request: AiGatewayRequest) -> Re
         "transcribe" => transcribe(&app, &request.provider_id, request.payload).await,
         "generate-subtitle" => generate_subtitle(request.payload),
         "generate-voice" => generate_voice(&app, &request.provider_id, request.payload).await,
+        "generate-image" => generate_image(&app, &request.provider_id, request.payload).await,
+        "generate-video" => generate_video(&app, &request.provider_id, request.payload).await,
         _ => Err(format!(
             "Operation '{}' is registered but its native adapter is not connected yet for provider '{}'.",
             request.operation, request.provider_id
@@ -198,6 +222,306 @@ async fn generate_voice(app: &AppHandle, provider_id: &str, payload: Value) -> R
         _ => Err(format!(
             "Voice generation adapter for provider '{provider_id}' is not connected yet."
         )),
+    }
+}
+
+
+async fn generate_image(app: &AppHandle, provider_id: &str, payload: Value) -> Result<Value, String> {
+    let payload: ImageGenerationPayload =
+        serde_json::from_value(payload).map_err(|error| format!("Invalid image payload: {error}"))?;
+
+    if payload.prompt.trim().is_empty() {
+        return Err("Image prompt cannot be empty.".to_string());
+    }
+
+    let api_key = read_ai_secret(app, provider_id)?;
+    let client = http_client()?;
+
+    match provider_id {
+        "openAI" => generate_openai_images(app, &client, &api_key, payload).await,
+        _ => Err(format!(
+            "Image generation adapter for provider '{provider_id}' is not connected yet."
+        )),
+    }
+}
+
+async fn generate_video(app: &AppHandle, provider_id: &str, payload: Value) -> Result<Value, String> {
+    let payload: VideoGenerationPayload =
+        serde_json::from_value(payload).map_err(|error| format!("Invalid video payload: {error}"))?;
+
+    if payload.prompt.trim().is_empty() {
+        return Err("Video prompt cannot be empty.".to_string());
+    }
+
+    let api_key = read_ai_secret(app, provider_id)?;
+    let client = http_client()?;
+
+    match provider_id {
+        "googleVeo" => generate_veo_video(app, &client, &api_key, payload).await,
+        _ => Err(format!(
+            "Video generation adapter for provider '{provider_id}' is not connected yet."
+        )),
+    }
+}
+
+async fn generate_openai_images(
+    app: &AppHandle,
+    client: &Client,
+    api_key: &str,
+    payload: ImageGenerationPayload,
+) -> Result<Value, String> {
+    let count = payload.count.unwrap_or(1).clamp(1, 4);
+    let size = openai_image_size(&payload.aspect_ratio);
+    let input = if let Some(reference_path) = payload.reference_image_path.as_deref() {
+        let data_url = local_image_data_url(reference_path)?;
+        json!([{
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": payload.prompt},
+                {"type": "input_image", "image_url": data_url}
+            ]
+        }])
+    } else {
+        Value::String(payload.prompt.clone())
+    };
+    let _seed = payload.seed;
+
+    let mut image_paths = Vec::with_capacity(count as usize);
+
+    for _ in 0..count {
+        let response = client
+            .post("https://api.openai.com/v1/responses")
+            .bearer_auth(api_key)
+            .json(&json!({
+                "model": "gpt-5.6-luna",
+                "input": input,
+                "store": false,
+                "tools": [{
+                    "type": "image_generation",
+                    "model": "gpt-image-2",
+                    "size": size,
+                    "quality": "medium",
+                    "output_format": "png"
+                }]
+            }))
+            .send()
+            .await
+            .map_err(|error| format!("OpenAI image generation failed: {error}"))?;
+
+        let status = response.status();
+        let raw = response.text().await.map_err(|error| error.to_string())?;
+        if !status.is_success() {
+            return Err(format!(
+                "OpenAI image generation returned HTTP {}: {}",
+                status.as_u16(),
+                compact_error(&raw)
+            ));
+        }
+
+        let value: Value = serde_json::from_str(&raw)
+            .map_err(|error| format!("OpenAI image generation returned invalid JSON: {error}"))?;
+        let encoded = extract_openai_image(&value)
+            .ok_or_else(|| "OpenAI response did not contain generated image data.".to_string())?;
+        let bytes = BASE64_STANDARD
+            .decode(encoded)
+            .map_err(|error| format!("Unable to decode generated image: {error}"))?;
+        let path = generated_media_path(app, "image-openai", "png")?;
+        fs::write(&path, bytes).map_err(|error| error.to_string())?;
+        image_paths.push(path.to_string_lossy().to_string());
+    }
+
+    Ok(json!({
+        "imagePaths": image_paths
+    }))
+}
+
+async fn generate_veo_video(
+    app: &AppHandle,
+    client: &Client,
+    api_key: &str,
+    payload: VideoGenerationPayload,
+) -> Result<Value, String> {
+    let duration = veo_duration(payload.duration_seconds);
+    let aspect_ratio = if payload.aspect_ratio == "9:16" { "9:16" } else { "16:9" };
+
+    let mut instance = json!({ "prompt": payload.prompt });
+
+    if let Some(reference_image_path) = payload.reference_image_path.as_deref() {
+        let data = fs::read(reference_image_path)
+            .map_err(|error| format!("Unable to read Veo reference image: {error}"))?;
+        instance["image"] = json!({
+            "inlineData": {
+                "mimeType": image_mime(reference_image_path),
+                "data": BASE64_STANDARD.encode(data)
+            }
+        });
+    }
+
+    if let Some(reference_video_path) = payload.reference_video_path.as_deref() {
+        let data = fs::read(reference_video_path)
+            .map_err(|error| format!("Unable to read Veo reference video: {error}"))?;
+        instance["video"] = json!({
+            "inlineData": {
+                "mimeType": media_mime(reference_video_path),
+                "data": BASE64_STANDARD.encode(data)
+            }
+        });
+    }
+
+    let response = client
+        .post("https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning")
+        .header("x-goog-api-key", api_key)
+        .json(&json!({
+            "instances": [instance],
+            "parameters": {
+                "aspectRatio": aspect_ratio,
+                "durationSeconds": duration.to_string(),
+                "resolution": "720p",
+                "numberOfVideos": 1
+            }
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("Veo generation request failed: {error}"))?;
+
+    let status = response.status();
+    let raw = response.text().await.map_err(|error| error.to_string())?;
+    if !status.is_success() {
+        return Err(format!(
+            "Veo returned HTTP {}: {}",
+            status.as_u16(),
+            compact_error(&raw)
+        ));
+    }
+
+    let initial: Value =
+        serde_json::from_str(&raw).map_err(|error| format!("Veo returned invalid JSON: {error}"))?;
+    let operation_name = initial
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Veo response did not contain an operation name.".to_string())?
+        .to_string();
+
+    let operation_url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/{}",
+        operation_name.trim_start_matches('/')
+    );
+
+    for _ in 0..120 {
+        sleep(Duration::from_secs(10)).await;
+
+        let poll = client
+            .get(&operation_url)
+            .header("x-goog-api-key", api_key)
+            .send()
+            .await
+            .map_err(|error| format!("Veo operation polling failed: {error}"))?;
+
+        let poll_status = poll.status();
+        let poll_raw = poll.text().await.map_err(|error| error.to_string())?;
+        if !poll_status.is_success() {
+            return Err(format!(
+                "Veo operation returned HTTP {}: {}",
+                poll_status.as_u16(),
+                compact_error(&poll_raw)
+            ));
+        }
+
+        let value: Value = serde_json::from_str(&poll_raw)
+            .map_err(|error| format!("Veo operation returned invalid JSON: {error}"))?;
+
+        if value.get("done").and_then(Value::as_bool) != Some(true) {
+            continue;
+        }
+
+        if let Some(error) = value.get("error") {
+            return Err(format!("Veo generation failed: {}", compact_error(&error.to_string())));
+        }
+
+        let video_uri = value
+            .pointer("/response/generateVideoResponse/generatedSamples/0/video/uri")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Veo completed without a downloadable video URI.".to_string())?;
+
+        let download = client
+            .get(video_uri)
+            .header("x-goog-api-key", api_key)
+            .send()
+            .await
+            .map_err(|error| format!("Veo video download failed: {error}"))?;
+
+        let download_status = download.status();
+        if !download_status.is_success() {
+            let error = download.text().await.map_err(|value| value.to_string())?;
+            return Err(format!(
+                "Veo video download returned HTTP {}: {}",
+                download_status.as_u16(),
+                compact_error(&error)
+            ));
+        }
+
+        let bytes = download.bytes().await.map_err(|error| error.to_string())?;
+        let path = generated_media_path(app, "video-veo", "mp4")?;
+        fs::write(&path, bytes).map_err(|error| error.to_string())?;
+
+        return Ok(json!({
+            "videoPath": path.to_string_lossy(),
+            "providerJobId": operation_name
+        }));
+    }
+
+    Err("Veo generation timed out after 20 minutes.".to_string())
+}
+
+fn extract_openai_image(value: &Value) -> Option<&str> {
+    value
+        .get("output")?
+        .as_array()?
+        .iter()
+        .find(|item| item.get("type").and_then(Value::as_str) == Some("image_generation_call"))
+        .and_then(|item| item.get("result"))
+        .and_then(Value::as_str)
+}
+
+fn local_image_data_url(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|error| format!("Unable to read reference image: {error}"))?;
+    Ok(format!(
+        "data:{};base64,{}",
+        image_mime(path),
+        BASE64_STANDARD.encode(bytes)
+    ))
+}
+
+fn image_mime(path: &str) -> &'static str {
+    match Path::new(path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => "image/png",
+    }
+}
+
+fn openai_image_size(aspect_ratio: &str) -> &'static str {
+    match aspect_ratio {
+        "9:16" => "1024x1536",
+        "16:9" => "1536x1024",
+        _ => "1024x1024",
+    }
+}
+
+fn veo_duration(requested: f64) -> u8 {
+    if requested <= 5.0 {
+        4
+    } else if requested <= 7.0 {
+        6
+    } else {
+        8
     }
 }
 
@@ -695,7 +1019,7 @@ fn compact_error(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_gemini_text, extract_openai_text, srt_timestamp};
+    use super::{extract_gemini_text, extract_openai_text, openai_image_size, srt_timestamp, veo_duration};
     use serde_json::json;
 
     #[test]
@@ -723,5 +1047,13 @@ mod tests {
     #[test]
     fn formats_srt_time() {
         assert_eq!(srt_timestamp(65.321), "00:01:05,321");
+    }
+
+    #[test]
+    fn maps_visual_dimensions() {
+        assert_eq!(openai_image_size("9:16"), "1024x1536");
+        assert_eq!(openai_image_size("16:9"), "1536x1024");
+        assert_eq!(veo_duration(5.5), 6);
+        assert_eq!(veo_duration(30.0), 8);
     }
 }
