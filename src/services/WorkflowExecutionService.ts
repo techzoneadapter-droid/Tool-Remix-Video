@@ -9,7 +9,7 @@ import type {
   SpeechProvider,
   SpeechTranscriptionRequest,
   SpeechTranscriptionResult,
-  SubtitleGenerationProvider,
+  SubtitleProvider,
   SubtitleGenerationRequest,
   SubtitleGenerationResult,
   TextGenerationProvider,
@@ -18,7 +18,7 @@ import type {
   VideoGenerationProvider,
   VideoGenerationRequest,
   VideoGenerationResult,
-  VoiceGenerationProvider,
+  VoiceProvider,
   VoiceGenerationRequest,
   VoiceGenerationResult
 } from "@/providers/Provider";
@@ -54,10 +54,10 @@ function isTextProvider(provider: AiProvider): provider is TextGenerationProvide
 function isSpeechProvider(provider: AiProvider): provider is SpeechProvider {
   return typeof (provider as unknown as { transcribe?: unknown }).transcribe === "function";
 }
-function isSubtitleProvider(provider: AiProvider): provider is SubtitleGenerationProvider {
+function isSubtitleProvider(provider: AiProvider): provider is SubtitleProvider {
   return typeof (provider as unknown as { generateSubtitles?: unknown }).generateSubtitles === "function";
 }
-function isVoiceProvider(provider: AiProvider): provider is VoiceGenerationProvider {
+function isVoiceProvider(provider: AiProvider): provider is VoiceProvider {
   return typeof (provider as unknown as { generateVoice?: unknown }).generateVoice === "function";
 }
 function isImageProvider(provider: AiProvider): provider is ImageGenerationProvider {
