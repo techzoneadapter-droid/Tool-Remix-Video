@@ -1,7 +1,14 @@
-import type { ProviderCapability } from "@/providers/Provider";
+import type {
+  ImageGenerationResult,
+  ProviderCapability,
+  SpeechTranscriptionResult,
+  SubtitleGenerationResult,
+  VideoGenerationResult,
+  VoiceGenerationResult
+} from "@/providers/Provider";
 import type { ToolRoute } from "@/types/Navigation";
 
-export type WorkflowJobStatus = "queued" | "running" | "paused" | "completed" | "cancelled" | "blocked";
+export type WorkflowJobStatus = "queued" | "running" | "paused" | "completed" | "cancelled" | "blocked" | "failed";
 
 export interface WorkflowStep {
   id: string;
@@ -16,6 +23,31 @@ export interface WorkflowLogEntry {
   message: string;
 }
 
+export interface WorkflowExecutionInput {
+  mediaPath?: string;
+  mediaName?: string;
+  targetLanguage?: "en" | "zh" | "vi";
+  voiceId?: string;
+  voiceStyle?: string;
+  idea?: string;
+  visualStyle?: string;
+  aspectRatio?: "16:9" | "9:16" | "1:1";
+}
+
+export interface WorkflowArtifacts {
+  analysis?: string;
+  script?: string;
+  narration?: string;
+  visualPrompt?: string;
+  transcript?: SpeechTranscriptionResult;
+  translatedTranscript?: SpeechTranscriptionResult;
+  subtitles?: SubtitleGenerationResult;
+  voice?: VoiceGenerationResult;
+  images?: ImageGenerationResult;
+  video?: VideoGenerationResult;
+  notes?: string[];
+}
+
 export interface WorkflowJob {
   id: string;
   route: ToolRoute;
@@ -25,4 +57,6 @@ export interface WorkflowJob {
   currentStep: string;
   createdAt: string;
   logs: WorkflowLogEntry[];
+  artifacts?: WorkflowArtifacts;
+  error?: string;
 }

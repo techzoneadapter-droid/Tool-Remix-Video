@@ -1,5 +1,4 @@
 import { aiProviderRegistry } from "@/services/AiProviderRegistry";
-import { projectHistoryService } from "@/services/ProjectHistoryService";
 import type { ProviderCapability } from "@/providers/Provider";
 import type { ToolRoute } from "@/types/Navigation";
 import type { WorkflowJob, WorkflowStep } from "@/types/WorkflowJob";
@@ -7,9 +6,9 @@ import type { WorkflowJob, WorkflowStep } from "@/types/WorkflowJob";
 const workflowSteps: Record<ToolRoute, WorkflowStep[]> = {
   "auto-remix": [
     { id: "analysis", label: "Phân tích nội dung & mục tiêu", progressWeight: 10, requiredCapabilities: ["llm"], optionalCapabilities: ["object-detection", "face-analysis"] },
-    { id: "scene", label: "Nhận diện cảnh", progressWeight: 8, requiredCapabilities: ["scene-detection"] },
+    { id: "scene", label: "Nhận diện cảnh", progressWeight: 8, requiredCapabilities: [], optionalCapabilities: ["scene-detection"] },
     { id: "speech", label: "Chuyển giọng nói thành văn bản", progressWeight: 9, requiredCapabilities: ["speech"] },
-    { id: "ocr", label: "OCR nội dung trong hình", progressWeight: 6, requiredCapabilities: ["ocr"] },
+    { id: "ocr", label: "OCR nội dung trong hình", progressWeight: 6, requiredCapabilities: [], optionalCapabilities: ["ocr"] },
     { id: "rewrite", label: "Viết lại kịch bản & CTA", progressWeight: 12, requiredCapabilities: ["llm"] },
     { id: "visual", label: "Tạo ảnh/B-roll khớp lời thoại", progressWeight: 12, requiredCapabilities: [], optionalCapabilities: ["image", "video"] },
     { id: "voice", label: "Tạo/thay giọng đọc", progressWeight: 9, requiredCapabilities: [], optionalCapabilities: ["voice"] },
@@ -46,29 +45,14 @@ export class WorkflowService {
     const missingCapabilities = this.getMissingCapabilities(route);
     const now = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     const blocked = missingCapabilities.length > 0;
-    return { id: `${route}-${Date.now()}`, route, title: workflowNames[route], status: blocked ? "blocked" : "running", progress: blocked ? 0 : Math.min(8, steps[0]?.progressWeight ?? 0), currentStep: blocked ? "Cần cấu hình AI Providers" : steps[0].label, createdAt: now, logs: [{ time: now, message: blocked ? `Thiếu capability: ${missingCapabilities.join(", ")}` : `Bắt đầu ${workflowNames[route]}` }] };
-  }
-
-  advance(job: WorkflowJob): WorkflowJob {
-    if (job.status !== "running") return job;
-    const steps = workflowSteps[job.route];
-    const nextProgress = Math.min(100, job.progress + 18);
-    const cumulative = steps.reduce<Array<{ label: string; threshold: number }>>((items, step) => {
-      const previous = items.length > 0 ? items[items.length - 1].threshold : 0;
-      return [...items, { label: step.label, threshold: previous + step.progressWeight }];
-    }, []);
-    const current = cumulative.find((step) => nextProgress <= step.threshold)?.label ?? "Hoàn tất kiểm tra chất lượng";
-    const now = new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    const nextJob: WorkflowJob = { ...job, status: nextProgress >= 100 ? "completed" : "running", progress: nextProgress, currentStep: nextProgress >= 100 ? "Hoàn thành" : current, logs: [...job.logs, { time: now, message: nextProgress >= 100 ? "Hoàn thành và sẵn sàng xuất video" : current }] };
-    if (nextJob.status === "completed") void projectHistoryService.saveWorkflowJob(nextJob);
-    return nextJob;
+    return { id: `${route}-${Date.now()}`, route, title: workflowNames[route], status: blocked ? "blocked" : "running", progress: 0, currentStep: blocked ? "Cần cấu hình AI Providers" : "Chuẩn bị pipeline AI", createdAt: now, logs: [{ time: now, message: blocked ? `Thiếu adapter thực thi: ${missingCapabilities.join(", ")}` : `Bắt đầu ${workflowNames[route]}` }] };
   }
 
   getSteps(route: ToolRoute): WorkflowStep[] { return workflowSteps[route]; }
 
   getMissingCapabilities(route: ToolRoute): ProviderCapability[] {
     const requiredCapabilities = Array.from(new Set(workflowSteps[route].flatMap((step) => step.requiredCapabilities)));
-    return requiredCapabilities.filter((capability) => aiProviderRegistry.findByCapability(capability).every((provider) => !provider.getHealth().configured));
+    return requiredCapabilities.filter((capability) => aiProviderRegistry.runnableByCapability(capability).length === 0);
   }
 
   getOptionalCapabilities(route: ToolRoute): ProviderCapability[] {

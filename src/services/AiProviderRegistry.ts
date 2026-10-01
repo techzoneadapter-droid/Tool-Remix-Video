@@ -39,6 +39,9 @@ export class AiProviderRegistry {
   health(): ProviderHealth[] { return this.providers.map((provider) => provider.getHealth()); }
   findByCapability(capability: ProviderCapability): AiProvider[] { return this.providers.filter((provider) => provider.capabilities.includes(capability)); }
   configuredByCapability(capability: ProviderCapability): AiProvider[] { return this.findByCapability(capability).filter((provider) => provider.getHealth().configured); }
+  runnableByCapability(capability: ProviderCapability): AiProvider[] {
+    return this.configuredByCapability(capability).filter((provider) => this.canExecute(provider, capability));
+  }
 
   async refreshConfig(): Promise<void> { await this.config.refresh(); }
   async saveProviderSecret(providerId: ProviderId, secret: string): Promise<void> { await this.config.save(providerId, secret); }
@@ -48,6 +51,26 @@ export class AiProviderRegistry {
     const configured = this.configuredByCapability(capability);
     const preferred = preferredIds.map((id) => configured.find((provider) => provider.id === id)).find((provider): provider is AiProvider => Boolean(provider));
     return preferred ?? configured[0];
+  }
+
+  firstRunnable(capability: ProviderCapability, preferredIds: string[] = []): AiProvider | undefined {
+    const runnable = this.runnableByCapability(capability);
+    const preferred = preferredIds.map((id) => runnable.find((provider) => provider.id === id)).find((provider): provider is AiProvider => Boolean(provider));
+    return preferred ?? runnable[0];
+  }
+
+  private canExecute(provider: AiProvider, capability: ProviderCapability): boolean {
+    const candidate = provider as unknown as Record<string, unknown>;
+    const methodByCapability: Partial<Record<ProviderCapability, string>> = {
+      llm: "generateText",
+      speech: "transcribe",
+      subtitle: "generateSubtitles",
+      voice: "generateVoice",
+      image: "generateImage",
+      video: "generateVideo"
+    };
+    const method = methodByCapability[capability];
+    return Boolean(method && typeof candidate[method] === "function");
   }
 }
 
