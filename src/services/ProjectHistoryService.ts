@@ -41,7 +41,7 @@ export class ProjectHistoryService {
       aspect: "16:9",
       duration: "09:16",
       date: job.createdAt,
-      status: job.status === "completed" ? completedStatus : job.status === "cancelled" ? errorStatus : runningStatus,
+      status: job.status === "completed" ? completedStatus : job.status === "cancelled" || job.status === "failed" ? errorStatus : runningStatus,
       thumbnail: job.route === "auto-magic" ? "magic" : job.route === "auto-translate" ? "history" : "space"
     });
   }

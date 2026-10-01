@@ -547,7 +547,8 @@ button {
   color: #f5aa42;
 }
 
-.status-dot.cancelled {
+.status-dot.cancelled,
+.status-dot.failed {
   background: #ef476f;
   color: #ef476f;
 }

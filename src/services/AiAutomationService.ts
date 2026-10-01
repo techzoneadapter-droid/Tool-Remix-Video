@@ -7,10 +7,11 @@ export class AiAutomationService {
   listReadiness(): AiAutomationReadiness[] {
     const health = aiProviderRegistry.health();
     return aiAutomationDefinitions.map((definition) => {
-      const readyCapabilities = definition.requiredCapabilities.filter((capability) => health.some((provider) => provider.configured && provider.capabilities.includes(capability)));
+      const readyCapabilities = definition.requiredCapabilities.filter((capability) => aiProviderRegistry.runnableByCapability(capability).length > 0);
       const missingCapabilities = definition.requiredCapabilities.filter((capability) => !readyCapabilities.includes(capability));
       const relevantCapabilities = new Set<ProviderCapability>([...definition.requiredCapabilities, ...definition.optionalCapabilities]);
-      const configuredProviders = health.filter((provider) => provider.configured && provider.capabilities.some((capability) => relevantCapabilities.has(capability))).map((provider) => provider.name);
+      const runnableProviderIds = new Set(Array.from(relevantCapabilities).flatMap((capability) => aiProviderRegistry.runnableByCapability(capability).map((provider) => provider.id)));
+      const configuredProviders = health.filter((provider) => runnableProviderIds.has(provider.id)).map((provider) => provider.name);
       return { definition, ready: missingCapabilities.length === 0, readyCapabilities, missingCapabilities, configuredProviders };
     });
   }

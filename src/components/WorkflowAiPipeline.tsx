@@ -27,7 +27,7 @@ export function WorkflowAiPipeline({ route }: { route: ToolRoute }) {
                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-white/70">{blocked ? <AlertTriangle size={12} className="text-amber-300" /> : <CheckCircle2 size={12} className="text-emerald-300" />}{step.label}</div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {capabilities.map((capability) => {
-                      const configured = aiProviderRegistry.configuredByCapability(capability).length > 0;
+                      const configured = aiProviderRegistry.runnableByCapability(capability).length > 0;
                       const isOptional = optional.has(capability) && !step.requiredCapabilities.includes(capability);
                       return <span key={`${step.id}-${capability}`} className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${configured ? "bg-emerald-400/10 text-emerald-300" : isOptional ? "bg-white/[0.05] text-white/35" : "bg-amber-400/10 text-amber-300"}`}>{capabilityLabels[capability] ?? capability}{isOptional ? " · opt" : ""}</span>;
                     })}

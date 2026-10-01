@@ -26,10 +26,12 @@ import { WorkflowAiPipeline } from "@/components/WorkflowAiPipeline";
 import { useExportController } from "@/hooks/useExportController";
 import { useWorkflowController } from "@/hooks/useWorkflowController";
 import { useCommercialStore } from "@/stores/CommercialStore";
+import { aiProviderRegistry } from "@/services/AiProviderRegistry";
+import { workflowService } from "@/services/WorkflowService";
 import { nativeMediaClient } from "@/tauri/NativeMediaClient";
 import type { ExportJob, ExportOptions } from "@/types/Export";
 import type { SceneItem, ToggleSetting, WorkflowDefinition } from "@/types/Workflow";
-import type { WorkflowJobStatus } from "@/types/WorkflowJob";
+import type { WorkflowExecutionInput, WorkflowJob, WorkflowJobStatus } from "@/types/WorkflowJob";
 
 interface WorkflowPageProps {
   workflow: WorkflowDefinition;
@@ -206,9 +208,33 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
   }
 
   async function startWorkflow() {
+    if (workflow.route !== "auto-magic" && !importedVideo?.nativePath) {
+      await pickVideoFromMachine();
+      return;
+    }
+
+    const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "en") as "en" | "zh" | "vi";
+    const input: WorkflowExecutionInput = {
+      mediaPath: importedVideo?.nativePath,
+      mediaName: importedVideo?.name,
+      targetLanguage,
+      voiceId: "marin",
+      voiceStyle: translateSettings.voiceStyle,
+      idea: magicSettings.backgroundPrompt.trim() || undefined,
+      visualStyle: magicSettings.characterStyle,
+      aspectRatio: "16:9"
+    };
+
+    await aiProviderRegistry.refreshConfig();
+    const missing = workflowService.getMissingCapabilities(workflow.route);
+    if (missing.length > 0) {
+      await workflowController.start(input);
+      return;
+    }
+
     const approved = await spendCredits({ amount: workflowCreditCost[workflow.route], reason: workflow.title });
     if (!approved) return;
-    workflowController.start();
+    await workflowController.start(input);
   }
 
   function resetWorkflowView() {
@@ -344,6 +370,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
             onResume={workflowController.resume}
             onCancel={workflowController.cancel}
           />
+          <WorkflowArtifactsPanel job={workflowController.activeJob} />
           <WorkflowPanel step="3" title={workflow.previewTitle}>
             <VideoPreview importedVideo={importedVideo} variant={workflow.previewVariant} translate={workflow.route === "auto-translate"} />
           </WorkflowPanel>
@@ -429,6 +456,47 @@ function VideoInfoPanel({ importedVideo }: { importedVideo: ImportedVideo | null
   );
 }
 
+
+function WorkflowArtifactsPanel({ job }: { job: WorkflowJob | null }) {
+  if (!job?.artifacts && !job?.error) return null;
+  const artifacts = job.artifacts;
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (artifacts?.transcript?.transcript) rows.push({ label: "Transcript", value: artifacts.transcript.transcript });
+  if (artifacts?.translatedTranscript?.transcript) rows.push({ label: "Bản dịch", value: artifacts.translatedTranscript.transcript });
+  if (artifacts?.analysis) rows.push({ label: "AI Analysis", value: artifacts.analysis });
+  if (artifacts?.script) rows.push({ label: "Kịch bản", value: artifacts.script });
+  if (artifacts?.visualPrompt) rows.push({ label: "Visual Prompt", value: artifacts.visualPrompt });
+  if (artifacts?.narration) rows.push({ label: "Narration", value: artifacts.narration });
+  if (artifacts?.voice?.audioPath) rows.push({ label: "Voice file", value: artifacts.voice.audioPath });
+  if (artifacts?.subtitles?.content) rows.push({ label: "Subtitle", value: `${artifacts.subtitles.format.toUpperCase()} · ${artifacts.subtitles.content.split("\n").filter(Boolean).length} dòng dữ liệu` });
+  if (artifacts?.images?.imagePaths.length) rows.push({ label: "Ảnh AI", value: `${artifacts.images.imagePaths.length} file · ${artifacts.images.imagePaths[0]}` });
+  if (artifacts?.video?.videoPath) rows.push({ label: "Video AI", value: artifacts.video.videoPath });
+  if (job.error) rows.push({ label: "Lỗi", value: job.error });
+
+  if (rows.length === 0) return null;
+
+  return (
+    <motion.section className="rounded-[18px] border border-white/[0.07] bg-black/15 p-4" layout transition={{ duration: 0.18 }}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-purple-300/80">AI Output</div>
+          <div className="mt-1 text-[11px] text-white/35">Kết quả thật được cập nhật sau từng bước pipeline.</div>
+        </div>
+        <span className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[10px] font-bold text-white/45">{job.progress}%</span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {rows.map((row) => (
+          <article key={row.label} className="min-w-0 rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
+            <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/35">{row.label}</div>
+            <div className={`mt-1.5 max-h-24 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 ${row.label === "Lỗi" ? "text-red-200" : "text-white/65"}`}>{row.value}</div>
+          </article>
+        ))}
+      </div>
+    </motion.section>
+  );
+}
+
 function WorkflowStatusPanel({
   status,
   progress,
@@ -454,7 +522,8 @@ function WorkflowStatusPanel({
     paused: "Tạm dừng",
     completed: "Hoàn thành",
     cancelled: "Đã hủy",
-    blocked: "Cần API key"
+    blocked: "Cần API / adapter",
+    failed: "Lỗi xử lý"
   };
 
   return (
