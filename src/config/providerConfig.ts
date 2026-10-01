@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { ProviderConfigReader } from "@/providers/Provider";
 
 export const providerEnvKeys = {
@@ -17,11 +18,46 @@ export const providerEnvKeys = {
 
 export type ProviderId = keyof typeof providerEnvKeys;
 
+interface NativeAiSecretStatus {
+  providerId: string;
+  configured: boolean;
+  storage: string;
+}
+
 export class EnvironmentProviderConfig implements ProviderConfigReader {
+  private readonly nativeConfiguredKeys = new Set<string>();
+
   has(key: string): boolean {
-    return Boolean(import.meta.env[key]?.trim());
+    return Boolean(import.meta.env[key]?.trim()) || this.nativeConfiguredKeys.has(key);
+  }
+
+  async refresh(): Promise<void> {
+    const providerIds = Object.keys(providerEnvKeys) as ProviderId[];
+    try {
+      const statuses = await invoke<NativeAiSecretStatus[]>("list_ai_secret_status", { providerIds });
+      for (const providerId of providerIds) {
+        const envKey = providerEnvKeys[providerId];
+        const nativeReady = statuses.some((item) => item.providerId === providerId && item.configured);
+        if (nativeReady) this.nativeConfiguredKeys.add(envKey);
+        else this.nativeConfiguredKeys.delete(envKey);
+      }
+    } catch {
+      // Browser/Vite preview has no native Tauri runtime. Environment variables remain usable for development.
+    }
+  }
+
+  async save(providerId: ProviderId, secret: string): Promise<void> {
+    await invoke("save_ai_secret", { providerId, secret });
+    this.nativeConfiguredKeys.add(providerEnvKeys[providerId]);
+  }
+
+  async remove(providerId: ProviderId): Promise<void> {
+    await invoke("delete_ai_secret", { providerId });
+    this.nativeConfiguredKeys.delete(providerEnvKeys[providerId]);
   }
 }
+
+export const providerConfig = new EnvironmentProviderConfig();
 
 export function getProviderEnvKey(providerId: ProviderId) {
   return providerEnvKeys[providerId];

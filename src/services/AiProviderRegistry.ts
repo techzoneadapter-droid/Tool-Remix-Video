@@ -1,4 +1,4 @@
-import { EnvironmentProviderConfig } from "@/config/providerConfig";
+import { providerConfig, type ProviderId } from "@/config/providerConfig";
 import { ConfiguredProvider } from "@/providers/ConfiguredProvider";
 import { DeepgramProvider } from "@/providers/Deepgram/DeepgramProvider";
 import { ElevenLabsProvider } from "@/providers/ElevenLabs/ElevenLabsProvider";
@@ -12,8 +12,8 @@ import type { AiProvider, ProviderCapability, ProviderHealth } from "@/providers
 export class AiProviderRegistry {
   private readonly providers: AiProvider[];
 
-  constructor() {
-    const config = new EnvironmentProviderConfig();
+  constructor(private readonly config = providerConfig) {
+    const config = this.config;
 
     this.providers = [
       new GeminiProvider(config),
@@ -39,6 +39,10 @@ export class AiProviderRegistry {
   health(): ProviderHealth[] { return this.providers.map((provider) => provider.getHealth()); }
   findByCapability(capability: ProviderCapability): AiProvider[] { return this.providers.filter((provider) => provider.capabilities.includes(capability)); }
   configuredByCapability(capability: ProviderCapability): AiProvider[] { return this.findByCapability(capability).filter((provider) => provider.getHealth().configured); }
+
+  async refreshConfig(): Promise<void> { await this.config.refresh(); }
+  async saveProviderSecret(providerId: ProviderId, secret: string): Promise<void> { await this.config.save(providerId, secret); }
+  async removeProviderSecret(providerId: ProviderId): Promise<void> { await this.config.remove(providerId); }
 
   firstConfigured(capability: ProviderCapability, preferredIds: string[] = []): AiProvider | undefined {
     const configured = this.configuredByCapability(capability);

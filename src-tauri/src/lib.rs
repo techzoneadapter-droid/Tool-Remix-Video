@@ -1,6 +1,7 @@
 mod ai_gateway;
 mod database;
 mod export;
+mod secret_store;
 
 use tauri::Manager;
 
@@ -20,7 +21,10 @@ pub fn run() {
             export::check_ffmpeg_health,
             export::run_ffmpeg_export,
             ai_gateway::ai_gateway_health,
-            ai_gateway::ai_gateway_request
+            ai_gateway::ai_gateway_request,
+            secret_store::list_ai_secret_status,
+            secret_store::save_ai_secret,
+            secret_store::delete_ai_secret
         ])
         .run(tauri::generate_context!())
         .expect("error while running RemixAI Pro");
