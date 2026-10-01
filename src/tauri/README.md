@@ -22,3 +22,11 @@ The native gateway now executes real text-generation calls for:
 - Gemini Interactions API (default model: `gemini-3.8-flash`)
 
 Provider calls resolve credentials inside the native layer. For local development you can also expose native process environment variables such as `OPENAI_API_KEY` or `GEMINI_API_KEY`; do not use `VITE_*` secrets for production.
+
+## Connected speech adapters
+
+- OpenAI audio transcription via `/v1/audio/transcriptions`.
+- Deepgram prerecorded transcription via Nova-3, including timestamp segments when available.
+- OpenAI text-to-speech via `/v1/audio/speech`.
+- ElevenLabs synchronous text-to-speech via `/v1/text-to-speech/{voice_id}`.
+- SRT generation is local and deterministic from transcript segments.

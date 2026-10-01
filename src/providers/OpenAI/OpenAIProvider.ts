@@ -10,6 +10,9 @@ import type {
   SpeechProvider,
   SpeechTranscriptionRequest,
   SpeechTranscriptionResult,
+  SubtitleGenerationRequest,
+  SubtitleGenerationResult,
+  SubtitleProvider,
   TextGenerationProvider,
   TextGenerationRequest,
   TextGenerationResult,
@@ -19,10 +22,10 @@ import type {
 } from "@/providers/Provider";
 import { aiGatewayClient } from "@/tauri/AiGatewayClient";
 
-export class OpenAIProvider implements TextGenerationProvider, SpeechProvider, VoiceProvider, ImageGenerationProvider {
+export class OpenAIProvider implements TextGenerationProvider, SpeechProvider, SubtitleProvider, VoiceProvider, ImageGenerationProvider {
   readonly id: ProviderId = "openAI";
   readonly name = "OpenAI";
-  readonly capabilities: ProviderCapability[] = ["llm", "speech", "voice", "image"];
+  readonly capabilities: ProviderCapability[] = ["llm", "speech", "subtitle", "voice", "image"];
 
   constructor(private readonly config: ProviderConfigReader) {}
 
@@ -47,6 +50,11 @@ export class OpenAIProvider implements TextGenerationProvider, SpeechProvider, V
   transcribe(request: SpeechTranscriptionRequest): Promise<SpeechTranscriptionResult> {
     this.assertConfigured();
     return aiGatewayClient.execute({ providerId: this.id, operation: "transcribe", payload: request });
+  }
+
+  generateSubtitles(request: SubtitleGenerationRequest): Promise<SubtitleGenerationResult> {
+    this.assertConfigured();
+    return aiGatewayClient.execute({ providerId: this.id, operation: "generate-subtitle", payload: request });
   }
 
   generateVoice(request: VoiceGenerationRequest): Promise<VoiceGenerationResult> {
