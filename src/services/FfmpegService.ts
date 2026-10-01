@@ -22,7 +22,10 @@ export class FfmpegService {
         codec: options.codec,
         resolution: options.resolution,
         aspectRatio: options.aspectRatio,
-        quality: options.quality
+        quality: options.quality,
+        voicePath: options.voicePath,
+        subtitleContent: options.subtitleContent,
+        preserveOriginalAudio: options.preserveOriginalAudio ?? false
       }
     });
   }

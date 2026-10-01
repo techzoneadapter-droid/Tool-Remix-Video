@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{fs, path::Path, process::Command};
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +20,9 @@ pub struct FfmpegExportOptions {
     pub resolution: String,
     pub aspect_ratio: String,
     pub quality: String,
+    pub voice_path: Option<String>,
+    pub subtitle_content: Option<String>,
+    pub preserve_original_audio: Option<bool>,
 }
 
 #[tauri::command]
@@ -53,21 +56,85 @@ pub fn run_ffmpeg_export(options: FfmpegExportOptions) -> Result<String, String>
     if options.input_path.trim().is_empty() || options.output_path.trim().is_empty() {
         return Err("Input and output paths are required for export.".to_string());
     }
+    if !Path::new(&options.input_path).is_file() {
+        return Err(format!("Input video does not exist: {}", options.input_path));
+    }
+    if let Some(parent) = Path::new(&options.output_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+    }
 
+    let voice_path = options
+        .voice_path
+        .as_deref()
+        .filter(|path| !path.trim().is_empty() && Path::new(path).is_file());
+
+    let subtitle_path = write_subtitle_sidecar(&options)?;
     let mut args = vec!["-y".to_string(), "-i".to_string(), options.input_path.clone()];
+    if let Some(path) = voice_path {
+        args.extend(["-i".to_string(), path.to_string()]);
+    }
+
+    if let Some(path) = subtitle_path.as_deref() {
+        args.extend([
+            "-vf".to_string(),
+            format!(
+                "{},subtitles='{}':charenc=UTF-8",
+                base_video_filter(&options.resolution, &options.aspect_ratio),
+                escape_filter_path(path)
+            ),
+        ]);
+    } else {
+        args.extend(video_filter_args(&options.resolution, &options.aspect_ratio));
+    }
+
+    if voice_path.is_some() {
+        if options.preserve_original_audio.unwrap_or(false) {
+            args.extend([
+                "-filter_complex".to_string(),
+                "[0:a][1:a]amix=inputs=2:duration=first:weights='0.28 1.0'[mix]".to_string(),
+                "-map".to_string(),
+                "0:v:0".to_string(),
+                "-map".to_string(),
+                "[mix]".to_string(),
+            ]);
+        } else {
+            args.extend([
+                "-map".to_string(),
+                "0:v:0".to_string(),
+                "-map".to_string(),
+                "1:a:0".to_string(),
+                "-shortest".to_string(),
+            ]);
+        }
+    } else {
+        args.extend([
+            "-map".to_string(),
+            "0:v:0".to_string(),
+            "-map".to_string(),
+            "0:a?".to_string(),
+        ]);
+    }
+
     args.extend(codec_args(&options.codec, &options.quality));
-    args.extend(video_filter_args(&options.resolution, &options.aspect_ratio));
     args.push(options.output_path.clone());
 
-    let status = Command::new("ffmpeg")
-        .args(args)
-        .status()
+    let output = Command::new("ffmpeg")
+        .args(&args)
+        .output()
         .map_err(|error| error.to_string())?;
 
-    if status.success() {
+    if let Some(path) = subtitle_path {
+        let _ = fs::remove_file(path);
+    }
+
+    if output.status.success() {
         Ok(options.output_path)
     } else {
-        Err(format!("FFmpeg export failed for {}.", options.format))
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let tail = stderr.lines().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
+        Err(format!("FFmpeg export failed for {}.\n{}", options.format, tail))
     }
 }
 
@@ -118,4 +185,29 @@ fn video_filter_args(resolution: &str, aspect_ratio: &str) -> Vec<String> {
         ],
         None => Vec::new(),
     }
+}
+
+
+fn write_subtitle_sidecar(options: &FfmpegExportOptions) -> Result<Option<String>, String> {
+    let Some(content) = options.subtitle_content.as_deref().filter(|value| !value.trim().is_empty()) else {
+        return Ok(None);
+    };
+    let path = format!("{}.remixai.srt", options.output_path);
+    fs::write(&path, content.as_bytes()).map_err(|error| error.to_string())?;
+    Ok(Some(path))
+}
+
+fn escape_filter_path(path: &str) -> String {
+    path.replace('\\', "/").replace(':', "\\:").replace('\'', "\\'")
+}
+
+fn base_video_filter(resolution: &str, aspect_ratio: &str) -> String {
+    let target = match (resolution, aspect_ratio) {
+        (value, "9:16") if value.contains("1920") || value.contains("1080") => "1080:1920",
+        (value, "1:1") if value.contains("1920") || value.contains("1080") => "1080:1080",
+        (value, _) if value.contains("1280") || value.contains("720") => "1280:720",
+        (value, _) if value.contains("3840") || value.contains("4K") => "3840:2160",
+        _ => "1920:1080",
+    };
+    format!("scale={target}:force_original_aspect_ratio=decrease,pad={target}:(ow-iw)/2:(oh-ih)/2")
 }

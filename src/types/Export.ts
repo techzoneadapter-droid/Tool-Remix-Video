@@ -17,6 +17,9 @@ export interface ExportOptions {
   resolution: string;
   aspectRatio: "16:9" | "9:16" | "1:1";
   quality: "Cao" | "Trung bình" | "Nhẹ";
+  voicePath?: string;
+  subtitleContent?: string;
+  preserveOriginalAudio?: boolean;
 }
 
 export interface ExportJob {

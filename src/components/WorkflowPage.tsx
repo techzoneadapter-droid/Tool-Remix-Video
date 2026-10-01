@@ -246,15 +246,20 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
   }
 
   function getExportOptions(): ExportOptions {
+    const artifacts = workflowController.activeJob?.artifacts;
+    const generatedVideo = artifacts?.video?.videoPath;
     return {
       workflowRoute: workflow.route,
-      inputPath: importedVideo?.nativePath ?? importedVideo?.file?.name ?? sampleVideo.name,
+      inputPath: generatedVideo ?? importedVideo?.nativePath ?? importedVideo?.file?.name ?? sampleVideo.name,
       outputPath: `D:\\RemixAI\\Exports\\${workflow.route}-${Date.now()}.mp4`,
       format: sampleVideo.format,
       codec: "h264",
       resolution: sampleVideo.resolution,
       aspectRatio: "16:9",
-      quality: "Cao"
+      quality: "Cao",
+      voicePath: generatedVideo ? undefined : artifacts?.voice?.audioPath,
+      subtitleContent: artifacts?.subtitles?.content,
+      preserveOriginalAudio: workflow.route === "auto-translate" ? translateSettings.preserveOriginalAudio : false
     };
   }
 
