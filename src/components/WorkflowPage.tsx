@@ -93,6 +93,11 @@ const localVoiceOptions = [
   "Khánh Vy · KorvaTTS local",
   "Phương Linh · KorvaTTS local",
   "Quỳnh Như · KorvaTTS local",
+  "Gia Bảo · KorvaTTS local",
+  "Hoàng Nam · KorvaTTS local",
+  "Hữu Đạt · KorvaTTS local",
+  "Quang Huy · KorvaTTS local",
+  "Thanh Phong · KorvaTTS local",
   "Marin · cloud fallback"
 ];
 
@@ -102,7 +107,12 @@ const localVoiceIds: Record<string, string> = {
   "Bảo Kim · KorvaTTS local": "bao_kim",
   "Khánh Vy · KorvaTTS local": "khanh_vy",
   "Phương Linh · KorvaTTS local": "phuong_linh",
-  "Quỳnh Như · KorvaTTS local": "quynh_nhu"
+  "Quỳnh Như · KorvaTTS local": "quynh_nhu",
+  "Gia Bảo · KorvaTTS local": "gia_bao",
+  "Hoàng Nam · KorvaTTS local": "hoang_nam",
+  "Hữu Đạt · KorvaTTS local": "huu_dat",
+  "Quang Huy · KorvaTTS local": "quang_huy",
+  "Thanh Phong · KorvaTTS local": "thanh_phong"
 };
 
 const defaultTranslateSettings: TranslateSettingsState = {
