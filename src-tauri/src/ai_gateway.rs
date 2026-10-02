@@ -837,7 +837,7 @@ async fn generate_vieneu_local_voice(
     let response = client
         .post(format!("{base_url}/v1/audio/speech"))
         .json(&json!({
-            "model": "vieneu-tts-v3-turbo",
+            "model": "vieneu-v3-turbo",
             "input": payload.text,
             "voice": voice,
             "response_format": "wav"
