@@ -347,8 +347,23 @@ export class WorkflowExecutionService {
   }
   private async generateVoice(request: VoiceGenerationRequest, controls: WorkflowExecutionControls): Promise<VoiceGenerationResult> {
     const normalizedVoice = request.voiceId.trim().toLocaleLowerCase("vi-VN");
-    const localOnly = normalizedVoice === "ngọc huyền" || normalizedVoice === "ngoc_huyen";
-    const preferredIds = localOnly ? ["vieNeuLocal", "korvaLocal"] : ["openAI", "elevenLabs"];
+    const korvaVoiceIds = new Set([
+      "bao_kim",
+      "khanh_vy",
+      "ngoc_huyen",
+      "phuong_linh",
+      "quynh_nhu",
+      "gia_bao",
+      "hoang_nam",
+      "huu_dat",
+      "quang_huy",
+      "thanh_phong"
+    ]);
+    const isKorvaVoice = korvaVoiceIds.has(normalizedVoice);
+    const localOnly = isKorvaVoice || normalizedVoice === "ngọc huyền";
+    const preferredIds = localOnly
+      ? (isKorvaVoice ? ["korvaLocal", "vieNeuLocal"] : ["vieNeuLocal", "korvaLocal"])
+      : ["openAI", "elevenLabs"];
     const allowedIds = localOnly ? ["vieNeuLocal", "korvaLocal"] : undefined;
 
     return (
