@@ -86,10 +86,16 @@ const languages = [
   { id: "vi", flag: "🇻🇳", title: "Việt Nam", subtitle: "Tiếng Việt", tab: "VI Tiếng Việt" }
 ];
 
+const localVoiceOptions = [
+  "Ngọc Huyền · VieNeu local",
+  "Ngọc Huyền · KorvaTTS local",
+  "Marin · cloud fallback"
+];
+
 const defaultTranslateSettings: TranslateSettingsState = {
-  language: "en",
+  language: "vi",
   voiceGender: "Giọng nữ",
-  voiceName: "Anna (Natural)",
+  voiceName: "Ngọc Huyền · VieNeu local",
   voiceStyle: "Tự nhiên",
   subtitleStyle: "TikTok (2 dòng)",
   subtitlePosition: "Dưới cùng (Bottom)",
@@ -213,12 +219,19 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
       return;
     }
 
-    const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "en") as "en" | "zh" | "vi";
+    const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "vi") as "en" | "zh" | "vi";
+    const selectedVoiceId = targetLanguage !== "vi"
+      ? "marin"
+      : translateSettings.voiceName.includes("KorvaTTS")
+        ? "ngoc_huyen"
+        : translateSettings.voiceName.includes("cloud")
+          ? "marin"
+          : "Ngọc Huyền";
     const input: WorkflowExecutionInput = {
       mediaPath: importedVideo?.nativePath,
       mediaName: importedVideo?.name,
       targetLanguage,
-      voiceId: "marin",
+      voiceId: selectedVoiceId,
       voiceStyle: translateSettings.voiceStyle,
       idea: magicSettings.backgroundPrompt.trim() || undefined,
       visualStyle: magicSettings.characterStyle,
@@ -783,7 +796,15 @@ function TranslateWorkspaceSettings({
         <span>Giọng đọc AI</span>
         <div className="translate-control-grid">
           <button onClick={() => patch({ voiceGender: value.voiceGender === "Giọng nữ" ? "Giọng nam" : "Giọng nữ" })}>{value.voiceGender}</button>
-          <button onClick={() => patch({ voiceName: value.voiceName === "Anna (Natural)" ? "Minh (Warm)" : "Anna (Natural)" })}>{value.voiceName}</button>
+          <button
+            onClick={() => {
+              const currentIndex = localVoiceOptions.indexOf(value.voiceName);
+              const nextVoice = localVoiceOptions[(currentIndex + 1) % localVoiceOptions.length];
+              patch({ voiceName: nextVoice });
+            }}
+          >
+            {value.voiceName}
+          </button>
           <button className="listen-button" onClick={() => patch({ voiceStyle: value.voiceStyle === "Tự nhiên" ? "Truyền cảm" : "Tự nhiên" })}>
             <Play size={14} />
             {value.voiceStyle}
