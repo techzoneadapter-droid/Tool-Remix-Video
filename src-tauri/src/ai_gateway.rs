@@ -5,7 +5,7 @@ use reqwest::{multipart, Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
-use tokio::time::{sleep, Duration};
+use tokio::{process::Command, time::{sleep, Duration}};
 
 use crate::secret_store::read_ai_secret;
 
@@ -213,18 +213,23 @@ async fn generate_voice(app: &AppHandle, provider_id: &str, payload: Value) -> R
         return Err("Voice text cannot be empty.".to_string());
     }
 
-    let api_key = read_ai_secret(app, provider_id)?;
-    let client = http_client()?;
-
     match provider_id {
-        "openAI" => generate_openai_voice(app, &client, &api_key, payload).await,
-        "elevenLabs" => generate_elevenlabs_voice(app, &client, &api_key, payload).await,
-        _ => Err(format!(
-            "Voice generation adapter for provider '{provider_id}' is not connected yet."
-        )),
+        "vieNeuLocal" => generate_vieneu_local_voice(app, &payload).await,
+        "korvaLocal" => generate_korva_local_voice(app, &payload).await,
+        _ => {
+            let api_key = read_ai_secret(app, provider_id)?;
+            let client = http_client()?;
+
+            match provider_id {
+                "openAI" => generate_openai_voice(app, &client, &api_key, payload).await,
+                "elevenLabs" => generate_elevenlabs_voice(app, &client, &api_key, payload).await,
+                _ => Err(format!(
+                    "Voice generation adapter for provider '{provider_id}' is not connected yet."
+                )),
+            }
+        }
     }
 }
-
 
 async fn generate_image(app: &AppHandle, provider_id: &str, payload: Value) -> Result<Value, String> {
     let payload: ImageGenerationPayload =
@@ -813,6 +818,111 @@ fn extract_deepgram_segments(value: &Value, alternative: &Value) -> Vec<SpeechSe
                 .collect()
         })
         .unwrap_or_default()
+}
+
+async fn generate_vieneu_local_voice(
+    app: &AppHandle,
+    payload: &VoiceGenerationPayload,
+) -> Result<Value, String> {
+    if !payload.language.to_ascii_lowercase().starts_with("vi") {
+        return Err("VieNeu-TTS local hiện chỉ hỗ trợ tiếng Việt.".to_string());
+    }
+
+    let base_url = std::env::var("VIENEU_LOCAL_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
+        .trim_end_matches('/')
+        .to_string();
+    let voice = vieneu_voice_name(&payload.voice_id);
+    let client = http_client()?;
+    let response = client
+        .post(format!("{base_url}/v1/audio/speech"))
+        .json(&json!({
+            "model": "vieneu-v3-turbo",
+            "input": payload.text,
+            "voice": voice,
+            "response_format": "wav"
+        }))
+        .send()
+        .await
+        .map_err(|error| format!("Không kết nối được VieNeu-TTS tại {base_url}: {error}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let raw = response.text().await.map_err(|error| error.to_string())?;
+        return Err(format!(
+            "VieNeu-TTS trả về HTTP {}: {}",
+            status.as_u16(),
+            compact_error(&raw)
+        ));
+    }
+
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+    let path = generated_media_path(app, "voice-vieneu", "wav")?;
+    fs::write(&path, &bytes).map_err(|error| error.to_string())?;
+
+    Ok(json!({
+        "audioPath": path.to_string_lossy(),
+        "durationSeconds": estimate_speech_duration(&payload.text)
+    }))
+}
+
+async fn generate_korva_local_voice(
+    app: &AppHandle,
+    payload: &VoiceGenerationPayload,
+) -> Result<Value, String> {
+    if !payload.language.to_ascii_lowercase().starts_with("vi") {
+        return Err("KorvaTTS local hiện chỉ hỗ trợ tiếng Việt.".to_string());
+    }
+
+    let binary = std::env::var("KORVATTS_BIN").unwrap_or_else(|_| "korvatts".to_string());
+    let voice = korva_voice_name(&payload.voice_id);
+    let path = generated_media_path(app, "voice-korva", "wav")?;
+    let output = Command::new(&binary)
+        .arg("synth")
+        .arg(&payload.text)
+        .arg("-v")
+        .arg(voice)
+        .arg("-o")
+        .arg(&path)
+        .output()
+        .await
+        .map_err(|error| format!("Không chạy được KorvaTTS ({binary}): {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "KorvaTTS thất bại (mã {}): {}",
+            output.status.code().unwrap_or(-1),
+            compact_error(&stderr)
+        ));
+    }
+
+    if !path.exists() {
+        return Err("KorvaTTS không tạo ra file WAV đầu ra.".to_string());
+    }
+
+    Ok(json!({
+        "audioPath": path.to_string_lossy(),
+        "durationSeconds": estimate_speech_duration(&payload.text)
+    }))
+}
+
+fn vieneu_voice_name(requested: &str) -> String {
+    let value = requested.trim();
+    if value.is_empty() || value.eq_ignore_ascii_case("ngoc_huyen") || value == "ngọc huyền" {
+        "Ngọc Huyền".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn korva_voice_name(requested: &str) -> String {
+    let value = requested.trim();
+    if value.is_empty() || value.eq_ignore_ascii_case("ngọc huyền") || value.eq_ignore_ascii_case("ngoc_huyen") {
+        "ngoc_huyen".to_string()
+    } else {
+        value.to_string()
+    }
 }
 
 async fn generate_openai_voice(

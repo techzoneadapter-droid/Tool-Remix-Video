@@ -144,7 +144,7 @@ export class WorkflowExecutionService {
     await run("voice", async () => {
       const voice = await this.generateVoice({
         text: targetTranscript.transcript,
-        voiceId: input.voiceId ?? "marin",
+        voiceId: input.voiceId ?? (targetLanguage === "vi" ? "Ngọc Huyền" : "marin"),
         language: targetLanguage,
         style: input.voiceStyle ?? "Tự nhiên, rõ ràng, giữ nhịp gần với video gốc."
       }, controls);
@@ -205,7 +205,7 @@ export class WorkflowExecutionService {
       if (aiProviderRegistry.runnableByCapability("voice").length === 0) return this.note(controls, "Không có voice adapter đang hoạt động nên giữ giọng gốc.");
       const voice = await this.generateVoice({
         text: this.clip(rewritten, 9000),
-        voiceId: input.voiceId ?? "marin",
+        voiceId: input.voiceId ?? "Ngọc Huyền",
         language: "vi",
         style: input.voiceStyle ?? "Tự nhiên, truyền cảm, không đọc kiểu quảng cáo máy móc."
       }, controls);
@@ -294,7 +294,7 @@ export class WorkflowExecutionService {
       const narration = narrationResult.text.trim();
       const voice = await this.generateVoice({
         text: narration,
-        voiceId: input.voiceId ?? "marin",
+        voiceId: input.voiceId ?? ((input.targetLanguage ?? "vi") === "vi" ? "Ngọc Huyền" : "marin"),
         language: input.targetLanguage ?? "vi",
         style: input.voiceStyle ?? "Tự nhiên, điện ảnh, ngắn gọn."
       }, controls);
@@ -346,7 +346,36 @@ export class WorkflowExecutionService {
     return (await this.callProvider("subtitle", ["openAI", "deepgram"], isSubtitleProvider, (provider) => provider.generateSubtitles(request), controls)).result;
   }
   private async generateVoice(request: VoiceGenerationRequest, controls: WorkflowExecutionControls): Promise<VoiceGenerationResult> {
-    return (await this.callProvider("voice", ["openAI", "elevenLabs"], isVoiceProvider, (provider) => provider.generateVoice(request), controls)).result;
+    const normalizedVoice = request.voiceId.trim().toLocaleLowerCase("vi-VN");
+    const korvaVoiceIds = new Set([
+      "bao_kim",
+      "khanh_vy",
+      "ngoc_huyen",
+      "phuong_linh",
+      "quynh_nhu",
+      "gia_bao",
+      "hoang_nam",
+      "huu_dat",
+      "quang_huy",
+      "thanh_phong"
+    ]);
+    const isKorvaVoice = korvaVoiceIds.has(normalizedVoice);
+    const localOnly = isKorvaVoice || normalizedVoice === "ngọc huyền";
+    const preferredIds = localOnly
+      ? (isKorvaVoice ? ["korvaLocal", "vieNeuLocal"] : ["vieNeuLocal", "korvaLocal"])
+      : ["openAI", "elevenLabs"];
+    const allowedIds = localOnly ? ["vieNeuLocal", "korvaLocal"] : undefined;
+
+    return (
+      await this.callProvider(
+        "voice",
+        preferredIds,
+        isVoiceProvider,
+        (provider) => provider.generateVoice(request),
+        controls,
+        allowedIds
+      )
+    ).result;
   }
   private async generateImage(request: ImageGenerationRequest, controls: WorkflowExecutionControls): Promise<ImageGenerationResult> {
     return (await this.callProvider("image", ["openAI"], isImageProvider, (provider) => provider.generateImage(request), controls)).result;
@@ -360,15 +389,21 @@ export class WorkflowExecutionService {
     preferredIds: string[],
     guard: (provider: AiProvider) => provider is TProvider,
     action: (provider: TProvider) => Promise<TResult>,
-    controls: WorkflowExecutionControls
+    controls: WorkflowExecutionControls,
+    allowedIds?: string[]
   ): Promise<{ provider: TProvider; result: TResult }> {
     const runnable = aiProviderRegistry.runnableByCapability(capability);
     const ordered = [
       ...preferredIds.flatMap((id) => runnable.filter((provider) => provider.id === id)),
       ...runnable.filter((provider) => !preferredIds.includes(provider.id))
     ].filter((provider, index, all) => all.findIndex((item) => item.id === provider.id) === index);
-    const providers = ordered.filter(guard);
-    if (providers.length === 0) throw new Error(`Không có adapter thực thi cho capability ${capability}.`);
+    const providers = ordered.filter(guard).filter((provider) => !allowedIds || allowedIds.includes(provider.id));
+    if (providers.length === 0) {
+      if (allowedIds?.length) {
+        throw new Error(`Chưa có TTS local khả dụng. Hãy chạy VieNeu-TTS hoặc cài KorvaTTS (voice local: ${allowedIds.join(", ")}).`);
+      }
+      throw new Error(`Không có adapter thực thi cho capability ${capability}.`);
+    }
 
     const failures: string[] = [];
     for (const provider of providers) {

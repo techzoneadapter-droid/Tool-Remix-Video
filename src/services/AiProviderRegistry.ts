@@ -6,6 +6,7 @@ import { FluxProvider } from "@/providers/Flux/FluxProvider";
 import { GeminiProvider } from "@/providers/Gemini/GeminiProvider";
 import { GoogleVeoProvider } from "@/providers/GoogleVeo/GoogleVeoProvider";
 import { LocalToolProvider } from "@/providers/LocalToolProvider";
+import { LocalTtsProvider } from "@/providers/LocalTtsProvider";
 import { OpenAIProvider } from "@/providers/OpenAI/OpenAIProvider";
 import type { AiProvider, ProviderCapability, ProviderHealth } from "@/providers/Provider";
 
@@ -16,6 +17,8 @@ export class AiProviderRegistry {
     const configReader = this.config;
 
     this.providers = [
+      new LocalTtsProvider("vieNeuLocal", "VieNeu-TTS (local)"),
+      new LocalTtsProvider("korvaLocal", "KorvaTTS (local)"),
       new GeminiProvider(configReader),
       new OpenAIProvider(configReader),
       new ConfiguredProvider("anthropic", "Anthropic Claude", ["llm"], configReader),

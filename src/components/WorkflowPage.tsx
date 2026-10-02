@@ -86,10 +86,39 @@ const languages = [
   { id: "vi", flag: "🇻🇳", title: "Việt Nam", subtitle: "Tiếng Việt", tab: "VI Tiếng Việt" }
 ];
 
+const localVoiceOptions = [
+  "Ngọc Huyền · VieNeu local",
+  "Ngọc Huyền · KorvaTTS local",
+  "Bảo Kim · KorvaTTS local",
+  "Khánh Vy · KorvaTTS local",
+  "Phương Linh · KorvaTTS local",
+  "Quỳnh Như · KorvaTTS local",
+  "Gia Bảo · KorvaTTS local",
+  "Hoàng Nam · KorvaTTS local",
+  "Hữu Đạt · KorvaTTS local",
+  "Quang Huy · KorvaTTS local",
+  "Thanh Phong · KorvaTTS local",
+  "Marin · cloud fallback"
+];
+
+const localVoiceIds: Record<string, string> = {
+  "Ngọc Huyền · VieNeu local": "Ngọc Huyền",
+  "Ngọc Huyền · KorvaTTS local": "ngoc_huyen",
+  "Bảo Kim · KorvaTTS local": "bao_kim",
+  "Khánh Vy · KorvaTTS local": "khanh_vy",
+  "Phương Linh · KorvaTTS local": "phuong_linh",
+  "Quỳnh Như · KorvaTTS local": "quynh_nhu",
+  "Gia Bảo · KorvaTTS local": "gia_bao",
+  "Hoàng Nam · KorvaTTS local": "hoang_nam",
+  "Hữu Đạt · KorvaTTS local": "huu_dat",
+  "Quang Huy · KorvaTTS local": "quang_huy",
+  "Thanh Phong · KorvaTTS local": "thanh_phong"
+};
+
 const defaultTranslateSettings: TranslateSettingsState = {
-  language: "en",
+  language: "vi",
   voiceGender: "Giọng nữ",
-  voiceName: "Anna (Natural)",
+  voiceName: "Ngọc Huyền · VieNeu local",
   voiceStyle: "Tự nhiên",
   subtitleStyle: "TikTok (2 dòng)",
   subtitlePosition: "Dưới cùng (Bottom)",
@@ -213,12 +242,15 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
       return;
     }
 
-    const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "en") as "en" | "zh" | "vi";
+    const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "vi") as "en" | "zh" | "vi";
+    const selectedVoiceId = targetLanguage !== "vi"
+      ? "marin"
+      : localVoiceIds[translateSettings.voiceName] ?? "Ngọc Huyền";
     const input: WorkflowExecutionInput = {
       mediaPath: importedVideo?.nativePath,
       mediaName: importedVideo?.name,
       targetLanguage,
-      voiceId: "marin",
+      voiceId: selectedVoiceId,
       voiceStyle: translateSettings.voiceStyle,
       idea: magicSettings.backgroundPrompt.trim() || undefined,
       visualStyle: magicSettings.characterStyle,
@@ -783,7 +815,15 @@ function TranslateWorkspaceSettings({
         <span>Giọng đọc AI</span>
         <div className="translate-control-grid">
           <button onClick={() => patch({ voiceGender: value.voiceGender === "Giọng nữ" ? "Giọng nam" : "Giọng nữ" })}>{value.voiceGender}</button>
-          <button onClick={() => patch({ voiceName: value.voiceName === "Anna (Natural)" ? "Minh (Warm)" : "Anna (Natural)" })}>{value.voiceName}</button>
+          <button
+            onClick={() => {
+              const currentIndex = localVoiceOptions.indexOf(value.voiceName);
+              const nextVoice = localVoiceOptions[(currentIndex + 1) % localVoiceOptions.length];
+              patch({ voiceName: nextVoice });
+            }}
+          >
+            {value.voiceName}
+          </button>
           <button className="listen-button" onClick={() => patch({ voiceStyle: value.voiceStyle === "Tự nhiên" ? "Truyền cảm" : "Tự nhiên" })}>
             <Play size={14} />
             {value.voiceStyle}
