@@ -3,7 +3,7 @@
 App dùng local-first cho giọng tiếng Việt:
 
 - VieNeu-TTS: engine chính, gọi qua API local `http://127.0.0.1:8000`, có preset `Ngọc Huyền`.
-- KorvaTTS: fallback chạy trực tiếp bằng lệnh `korvatts`, có voice `ngoc_huyen`.
+- KorvaTTS: fallback chạy trực tiếp bằng lệnh `korvatts`, có 10 preset Việt (Bảo Kim, Khánh Vy, Ngọc Huyền, Phương Linh, Quỳnh Như và 5 giọng nam).
 - Nếu chọn `Marin · cloud fallback`, app mới dùng provider cloud đã cấu hình.
 
 ## 1. Chạy VieNeu-TTS
