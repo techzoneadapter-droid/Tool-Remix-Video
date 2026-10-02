@@ -89,8 +89,21 @@ const languages = [
 const localVoiceOptions = [
   "Ngọc Huyền · VieNeu local",
   "Ngọc Huyền · KorvaTTS local",
+  "Bảo Kim · KorvaTTS local",
+  "Khánh Vy · KorvaTTS local",
+  "Phương Linh · KorvaTTS local",
+  "Quỳnh Như · KorvaTTS local",
   "Marin · cloud fallback"
 ];
+
+const localVoiceIds: Record<string, string> = {
+  "Ngọc Huyền · VieNeu local": "Ngọc Huyền",
+  "Ngọc Huyền · KorvaTTS local": "ngoc_huyen",
+  "Bảo Kim · KorvaTTS local": "bao_kim",
+  "Khánh Vy · KorvaTTS local": "khanh_vy",
+  "Phương Linh · KorvaTTS local": "phuong_linh",
+  "Quỳnh Như · KorvaTTS local": "quynh_nhu"
+};
 
 const defaultTranslateSettings: TranslateSettingsState = {
   language: "vi",
@@ -222,11 +235,7 @@ export function WorkflowPage({ workflow }: WorkflowPageProps) {
     const targetLanguage = (["en", "zh", "vi"].includes(translateSettings.language) ? translateSettings.language : "vi") as "en" | "zh" | "vi";
     const selectedVoiceId = targetLanguage !== "vi"
       ? "marin"
-      : translateSettings.voiceName.includes("KorvaTTS")
-        ? "ngoc_huyen"
-        : translateSettings.voiceName.includes("cloud")
-          ? "marin"
-          : "Ngọc Huyền";
+      : localVoiceIds[translateSettings.voiceName] ?? "Ngọc Huyền";
     const input: WorkflowExecutionInput = {
       mediaPath: importedVideo?.nativePath,
       mediaName: importedVideo?.name,
